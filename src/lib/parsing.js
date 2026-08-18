@@ -192,6 +192,8 @@ const isRoundLike = (s) => /^(final|s[ée]rie|demi|qualif|h\.?\s*stade)/i.test(s
 const isLevelLike = (s) => /^(N\d|I[AB]|R\d|D\d|IR\d)$/i.test(s.trim());
 const isPlaceLike = (s) => /^\d{1,3}(\s*\([^)]*\))?$/.test(s.trim());
 const isPointsLike = (s) => /^\d{3,5}$/.test(s.trim());
+const isCategoryLike = (s) => /^(MI|BE|PO|EA|CA|JU|ES|SE|VE|V1|V2|V3|V4)$/i.test(s.trim());
+const isRegionDeptLike = (s) => /^[a-z-]+\s*\/\s*\d{2,3}$/i.test(s.trim());
 
 export function parseAthleteHistoryText(text, disciplinesList, aliases, referenceYear) {
   const year = referenceYear || new Date().getFullYear();
@@ -237,10 +239,11 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
     if (mark === null) return;
 
     const rest = cols.filter((_, i) => i !== discIdx && i !== dateIdx && i !== markIdx);
-    const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c));
+    const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c));
     const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").trim();
+    const club = candidates.length >= 2 ? candidates[candidates.length - 2].trim() : "";
 
-    rows.push({ disciplineId, date, mark, wind, competition });
+    rows.push({ disciplineId, date, mark, wind, competition, club });
   });
   return rows;
 }

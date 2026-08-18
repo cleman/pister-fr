@@ -18,6 +18,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   const [round, setRound] = useState(ROUND_CHOICES[0]);
   const [mark, setMark] = useState(null);
   const [wind, setWind] = useState(null);
+  const [club, setClub] = useState(athlete.club || "");
   const [compMode, setCompMode] = useState("existing"); // 'existing' | 'new'
   const [competitionId, setCompetitionId] = useState("");
   const [newCompName, setNewCompName] = useState("");
@@ -41,7 +42,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
     await onAddPerformance({
       athleteId: athlete.id,
       athleteName: athlete.canonicalName,
-      athleteClub: athlete.club,
+      athleteClub: club || athlete.club || "",
       competitionId: compMode === "existing" ? competitionId : null,
       newCompetition: compMode === "new" ? { name: newCompName.trim(), date: newCompDate, tier: "circuit" } : null,
       disciplineId, gender, round, mark, wind,
@@ -65,7 +66,9 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
     if (rows.length < totalLines) {
       setBulkInfo(`${rows.length} ligne(s) reconnue(s) sur ${totalLines} collée(s) — les autres sont ignorées (non-partant/abandon, ou discipline non gérée).`);
     }
-    setBulkRows(rows);
+    // pré-remplit le club avec celui lu dans le texte (fiche de records),
+    // ou à défaut le club actuel de l'athlète — modifiable ligne par ligne
+    setBulkRows(rows.map((r) => ({ ...r, club: r.club || athlete.club || "" })));
   }
 
   function updateBulkRow(i, patch) {
@@ -93,7 +96,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       const usedId = await onAddPerformance({
         athleteId: athlete.id,
         athleteName: athlete.canonicalName,
-        athleteClub: athlete.club,
+        athleteClub: row.club || "",
         competitionId: compId || null,
         newCompetition: compId ? null : { name: row.competition || "Compétition (à préciser)", date: row.date || new Date().toISOString().slice(0, 10), tier: "circuit" },
         disciplineId: row.disciplineId, gender, round: ROUND_CHOICES[0], mark: row.mark, wind: row.wind,
@@ -151,6 +154,8 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
             )}
           </div>
 
+          <input className="field" placeholder="Club (à l'époque de cette performance)" value={club} onChange={(e) => setClub(e.target.value)} />
+
           <div className="flex rounded-sm overflow-hidden" style={{ border: "1px solid var(--line)", width: "fit-content" }}>
             <button type="button" onClick={() => setCompMode("existing")} className="font-mono text-[10px] uppercase px-3 py-1.5" style={{ background: compMode === "existing" ? "var(--ink)" : "var(--card)", color: compMode === "existing" ? "#fff" : "var(--ink)" }}>Compétition existante</button>
             <button type="button" onClick={() => setCompMode("new")} className="font-mono text-[10px] uppercase px-3 py-1.5" style={{ background: compMode === "new" ? "var(--ink)" : "var(--card)", color: compMode === "new" ? "#fff" : "var(--ink)" }}>Nouvelle compétition</button>
@@ -176,7 +181,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       ) : (
         <div className="space-y-3">
           <p className="text-xs" style={{ color: "var(--steel)" }}>
-            Colle l'historique de performances (ex. copié depuis la fiche athlète du site de la FFA). Chaque ligne doit contenir une discipline reconnue, une marque, et idéalement une date et le nom de la compétition.
+            Colle l'historique de performances (ex. copié depuis la fiche athlète du site de la FFA). Chaque ligne doit contenir une discipline reconnue, une marque, et idéalement une date et le nom de la compétition. Le club est lu automatiquement quand la fiche source en contient un (ex. fiche de records), sinon le club actuel est proposé par défaut — modifiable ligne par ligne.
           </p>
           <textarea
             className="field font-mono text-xs"
@@ -202,6 +207,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
                     <MeasurementField discipline={disc} value={row.mark} onChange={(v) => updateBulkRow(i, { mark: v })} />
                     <input className="field flex-1 min-w-[8rem]" placeholder="Compétition" value={row.competition} onChange={(e) => updateBulkRow(i, { competition: e.target.value })} />
                     <input className="field" type="date" style={{ width: "9rem" }} value={row.date || ""} onChange={(e) => updateBulkRow(i, { date: e.target.value })} />
+                    <input className="field flex-1 min-w-[8rem]" placeholder="Club" value={row.club || ""} onChange={(e) => updateBulkRow(i, { club: e.target.value })} />
                     <button onClick={() => removeBulkRow(i)} className="font-mono text-[10px]" style={{ color: "var(--track)" }}>Retirer</button>
                   </div>
                 );

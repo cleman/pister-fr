@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { X, Calendar, Trash2 } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { X, Calendar, Trash2, Filter } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { formatMark, isBetterMark } from "../lib/marks";
 import { roundLabel } from "../lib/rounds";
@@ -10,6 +10,7 @@ import AddPerformancePanel from "./AddPerformancePanel";
 export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance, onSetGender, onDeletePerformance }) {
   const { canEdit, isAdmin } = useAuth();
   const athlete = athletes.find((a) => a.id === athleteId);
+  const [historyFilter, setHistoryFilter] = useState(null); // `${disciplineId}-${gender}` ou null
   const history = useMemo(() => getAthleteHistory(athleteId, resultsStore, competitions), [athleteId, resultsStore, competitions]);
   const bests = useMemo(() => {
     const map = {};
@@ -21,6 +22,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
     });
     return Object.values(map).sort((a, b) => a.disciplineId.localeCompare(b.disciplineId));
   }, [history]);
+  const visibleHistory = historyFilter ? history.filter((h) => `${h.disciplineId}-${h.gender}` === historyFilter) : history;
 
   if (!athlete) return null;
 
@@ -59,14 +61,21 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
           {bests.length === 0 ? (
             <p className="text-sm mb-4" style={{ color: "var(--steel)" }}>Aucun résultat enregistré pour le moment.</p>
           ) : (
-            <div className="space-y-2 mb-4">
+            <div className="space-y-1 mb-4">
               {bests.map((b) => {
                 const disc = DISCIPLINES.find((d) => d.id === b.disciplineId);
+                const key = `${b.disciplineId}-${b.gender}`;
+                const active = historyFilter === key;
                 return (
-                  <div key={`${b.disciplineId}-${b.gender}`} className="flex items-center justify-between text-sm">
-                    <span style={{ color: "var(--ink)" }}>{disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}</span></span>
+                  <button
+                    key={key}
+                    onClick={() => setHistoryFilter(active ? null : key)}
+                    className="focus-ring w-full flex items-center justify-between text-sm py-1 px-2 -mx-2 rounded-sm"
+                    style={{ background: active ? "var(--paper)" : "transparent" }}
+                  >
+                    <span style={{ color: active ? "var(--track)" : "var(--ink)" }}>{disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}</span></span>
                     <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>{formatMark(disc, b.mark)}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -78,12 +87,19 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
         </div>
 
         <div className="px-5 pb-8">
-          <p className="font-mono text-xs uppercase tracking-wider mb-3" style={{ color: "var(--steel)" }}>Historique des résultats</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-mono text-xs uppercase tracking-wider" style={{ color: "var(--steel)" }}>Historique des résultats</p>
+            {historyFilter && (
+              <button onClick={() => setHistoryFilter(null)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>
+                <Filter size={10} /> Filtré <X size={10} />
+              </button>
+            )}
+          </div>
           <div className="space-y-1">
-            {history.map((h, i) => {
+            {visibleHistory.map((h, i) => {
               const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
               return (
-                <div key={i} className="flex items-center gap-1" style={{ borderBottom: i !== history.length - 1 ? "1px solid var(--line)" : "none" }}>
+                <div key={i} className="flex items-center gap-1" style={{ borderBottom: i !== visibleHistory.length - 1 ? "1px solid var(--line)" : "none" }}>
                   <button onClick={() => onOpenCompetition(h.compId, h.disciplineId, h.gender, h.round)}
                     className="focus-ring flex-1 min-w-0 flex items-start justify-between text-sm py-2.5 text-left">
                     <div className="min-w-0">
@@ -102,7 +118,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
                 </div>
               );
             })}
-            {history.length === 0 && <p className="text-sm" style={{ color: "var(--steel)" }}>Aucun historique.</p>}
+            {visibleHistory.length === 0 && <p className="text-sm" style={{ color: "var(--steel)" }}>Aucun historique.</p>}
           </div>
         </div>
       </div>
