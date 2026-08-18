@@ -1,14 +1,19 @@
 import React, { useMemo, useState } from "react";
-import { Bell, BellRing, Calendar, Eye, MapPin, Pencil, Plus } from "lucide-react";
+import { Bell, BellRing, Calendar, Eye, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import { TIERS, STATUS_INFO, TIER_WEIGHT } from "../data/competitions";
 import { getCompStatus } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 
-export default function CalendarTab({ loaded, competitions, resultsStore, onOpen, onToggleFollow, onAddCompetition }) {
-  const { canEdit } = useAuth();
+export default function CalendarTab({ loaded, competitions, resultsStore, onOpen, onToggleFollow, onAddCompetition, onDeleteCompetition }) {
+  const { canEdit, isAdmin } = useAuth();
   const [statusFilter, setStatusFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", date: "", location: "", tier: "circuit" });
+
+  function handleDelete(c) {
+    if (!window.confirm(`Supprimer "${c.name}" et TOUS ses résultats saisis ? Cette action est irréversible.`)) return;
+    onDeleteCompetition(c.id);
+  }
 
   const rows = useMemo(() => {
     return competitions
@@ -79,6 +84,11 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
             <button onClick={() => onOpen(c.id, canEdit ? "edit" : "view")} className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm shrink-0" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>
               {canEdit ? (<><Pencil size={13} /> Éditeur</>) : (<><Eye size={13} /> Voir</>)}
             </button>
+            {isAdmin && (
+              <button onClick={() => handleDelete(c)} aria-label="Supprimer cette compétition" className="focus-ring p-1.5 rounded-sm shrink-0" style={{ color: "var(--track)" }}>
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
         ))}
         {rows.length === 0 && <p className="text-sm font-mono" style={{ color: "var(--steel)" }}>Aucune compétition pour ce filtre.</p>}

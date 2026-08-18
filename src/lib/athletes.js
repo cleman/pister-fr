@@ -53,12 +53,12 @@ export function resolveAthlete(name, club, athletes) {
   return { id: uid(), isNew: true, canonicalName: name.trim(), club };
 }
 
-export function resolveBlockEntries(entries, athletesReg) {
+export function resolveBlockEntries(entries, athletesReg, gender) {
   let reg = athletesReg;
   const resolved = entries.map((e) => {
     const r = resolveAthlete(e.name, e.club, reg);
-    if (r.isNew) reg = [...reg, { id: r.id, canonicalName: r.canonicalName, club: e.club }];
-    else reg = reg.map((a) => (a.id === r.id ? { ...a, club: e.club || a.club } : a));
+    if (r.isNew) reg = [...reg, { id: r.id, canonicalName: r.canonicalName, club: e.club, gender: gender || null }];
+    else reg = reg.map((a) => (a.id === r.id ? { ...a, club: e.club || a.club, gender: a.gender || gender || null } : a));
     return { ...e, name: r.canonicalName, athleteId: r.id };
   });
   return { entries: resolved, registry: reg };

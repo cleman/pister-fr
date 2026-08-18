@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { X, Calendar } from "lucide-react";
+import { X, Calendar, Trash2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { formatMark, isBetterMark } from "../lib/marks";
 import { roundLabel } from "../lib/rounds";
@@ -7,8 +7,8 @@ import { getAthleteHistory } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import AddPerformancePanel from "./AddPerformancePanel";
 
-export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance }) {
-  const { canEdit } = useAuth();
+export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance, onSetGender, onDeletePerformance }) {
+  const { canEdit, isAdmin } = useAuth();
   const athlete = athletes.find((a) => a.id === athleteId);
   const history = useMemo(() => getAthleteHistory(athleteId, resultsStore, competitions), [athleteId, resultsStore, competitions]);
   const bests = useMemo(() => {
@@ -24,6 +24,11 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
 
   if (!athlete) return null;
 
+  function handleDelete(h) {
+    if (!window.confirm(`Supprimer cette performance (${h.compName}) ? Cette action est irréversible.`)) return;
+    onDeletePerformance(h.compId, h.disciplineId, h.gender, h.round);
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0" style={{ background: "rgba(20,23,31,0.5)" }} onClick={onClose} />
@@ -33,6 +38,20 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
           <p className="font-mono text-xs uppercase tracking-wider mb-1" style={{ color: "var(--lane-yellow)" }}>Fiche athlète</p>
           <h2 className="font-display font-semibold text-2xl text-white">{athlete.canonicalName}</h2>
           <p className="text-sm mt-1" style={{ color: "#c7ccd3" }}>{athlete.club || "Club non renseigné"}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="font-mono text-[10px] uppercase tracking-wide" style={{ color: "#c7ccd3" }}>Sexe :</span>
+            {canEdit ? (
+              <div className="flex rounded-sm overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
+                {["H", "F"].map((g) => (
+                  <button key={g} onClick={() => onSetGender(athlete.id, g)} className="font-mono text-[10px] uppercase px-2 py-1"
+                    style={{ background: athlete.gender === g ? "var(--track)" : "transparent", color: "#fff" }}>{g}</button>
+                ))}
+              </div>
+            ) : (
+              <span className="font-mono text-[10px]" style={{ color: "#fff" }}>{athlete.gender || "non renseigné"}</span>
+            )}
+            {!athlete.gender && <span className="font-mono text-[10px]" style={{ color: "var(--lane-yellow)" }}>à renseigner</span>}
+          </div>
         </div>
 
         <div className="p-5">
@@ -64,17 +83,23 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
             {history.map((h, i) => {
               const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
               return (
-                <button key={i} onClick={() => onOpenCompetition(h.compId, h.disciplineId, h.gender, h.round)}
-                  className="focus-ring w-full flex items-start justify-between text-sm py-2.5 text-left"
-                  style={{ borderBottom: i !== history.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <div>
-                    <p style={{ color: "var(--track)" }}>{h.compName}</p>
-                    <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: "var(--steel)" }}>
-                      <Calendar size={11} />{new Date(h.date).toLocaleDateString("fr-FR")} · {disc ? getLabel(disc, h.gender) : h.disciplineId} · {roundLabel(h.round)} · {h.place}e place
-                    </p>
-                  </div>
-                  <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>{formatMark(disc, h.mark)}</span>
-                </button>
+                <div key={i} className="flex items-center gap-1" style={{ borderBottom: i !== history.length - 1 ? "1px solid var(--line)" : "none" }}>
+                  <button onClick={() => onOpenCompetition(h.compId, h.disciplineId, h.gender, h.round)}
+                    className="focus-ring flex-1 min-w-0 flex items-start justify-between text-sm py-2.5 text-left">
+                    <div className="min-w-0">
+                      <p style={{ color: "var(--track)" }}>{h.compName}</p>
+                      <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: "var(--steel)" }}>
+                        <Calendar size={11} />{new Date(h.date).toLocaleDateString("fr-FR")} · {disc ? getLabel(disc, h.gender) : h.disciplineId} · {roundLabel(h.round)} · {h.place}e place
+                      </p>
+                    </div>
+                    <span className="font-mono font-semibold shrink-0 ml-2" style={{ color: "var(--ink)" }}>{formatMark(disc, h.mark)}</span>
+                  </button>
+                  {isAdmin && (
+                    <button onClick={() => handleDelete(h)} aria-label="Supprimer cette performance" className="focus-ring p-1.5 rounded-sm shrink-0" style={{ color: "var(--steel)" }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               );
             })}
             {history.length === 0 && <p className="text-sm" style={{ color: "var(--steel)" }}>Aucun historique.</p>}

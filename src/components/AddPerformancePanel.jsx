@@ -13,7 +13,7 @@ const ROUND_CHOICES = [
 export default function AddPerformancePanel({ athlete, competitions, onAddPerformance }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("single"); // 'single' | 'bulk'
-  const [gender, setGender] = useState("H");
+  const [gender, setGender] = useState(athlete.gender || "H");
   const [disciplineId, setDisciplineId] = useState("100");
   const [round, setRound] = useState(ROUND_CHOICES[0]);
   const [mark, setMark] = useState(null);
@@ -28,6 +28,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   const [bulkText, setBulkText] = useState("");
   const [bulkRows, setBulkRows] = useState(null);
   const [bulkError, setBulkError] = useState("");
+  const [bulkInfo, setBulkInfo] = useState("");
 
   const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
 
@@ -52,13 +53,18 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   }
 
   function analyzeBulk() {
+    const totalLines = bulkText.split(/\r?\n+/).map((l) => l.trim()).filter(Boolean).length;
     const rows = parseAthleteHistoryText(bulkText, DISCIPLINES, DISCIPLINE_ALIASES);
+    setBulkError("");
+    setBulkInfo("");
     if (!rows.length) {
       setBulkError("Aucune ligne reconnue. Assure-toi que chaque ligne contient un libellé de discipline reconnu (ex. \"100m\", \"Longueur\", \"Poids\"...) et une marque.");
       setBulkRows(null);
       return;
     }
-    setBulkError("");
+    if (rows.length < totalLines) {
+      setBulkInfo(`${rows.length} ligne(s) reconnue(s) sur ${totalLines} collée(s) — les autres sont ignorées (non-partant/abandon, ou discipline non gérée).`);
+    }
     setBulkRows(rows);
   }
 
@@ -181,6 +187,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
           />
           <button onClick={analyzeBulk} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--ink)", color: "#fff" }}>Analyser le texte</button>
           {bulkError && <p className="text-xs font-mono" style={{ color: "var(--track)" }}>{bulkError}</p>}
+          {bulkInfo && <p className="text-xs font-mono" style={{ color: "var(--steel)" }}>{bulkInfo}</p>}
 
           {bulkRows && (
             <div className="space-y-2">

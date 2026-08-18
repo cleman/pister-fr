@@ -11,9 +11,9 @@ import ResultsTable from "./ResultsTable";
 export default function CompetitionEditorPage({
   comp, blocks, athletes, mode,
   initialDisciplineId, initialGender, initialRound,
-  onModeChange, onBack, onSelectAthlete, onSaveBlock, onUpdateBlock, onDeleteBlock, onToggleComplete,
+  onModeChange, onBack, onSelectAthlete, onSaveBlock, onUpdateBlock, onDeleteBlock, onDeleteEntry, onToggleComplete,
 }) {
-  const { canEdit } = useAuth();
+  const { canEdit, isAdmin } = useAuth();
   const effectiveMode = canEdit ? mode : "view";
   const [filterGender, setFilterGender] = useState(initialGender || (blocks[0] ? blocks[0].gender : "H"));
   const [filterDisciplineId, setFilterDisciplineId] = useState(initialDisciplineId || (blocks[0] ? blocks[0].disciplineId : "100"));
@@ -113,7 +113,7 @@ export default function CompetitionEditorPage({
                 <button onClick={() => setEditing(true)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>Modifier</button>
                 <button onClick={() => { onDeleteBlock(activeBlockIndex); setActiveRound(defaultRound(blocksForFilter.filter((b) => b !== activeBlock))); }} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: "1px solid var(--line)", color: "var(--track)" }}><Trash2 size={11} /> Supprimer</button>
               </div>
-              <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} />
+              <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} onDeleteEntry={isAdmin ? (athleteId) => onDeleteEntry(filterDisciplineId, filterGender, activeRound, athleteId) : undefined} />
             </div>
           )
         ) : (

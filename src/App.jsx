@@ -36,6 +36,7 @@ export default function App() {
   // écriture écraserait la précédente au lieu de s'accumuler.
   const competitionsRef = useRef(DEFAULT_COMPETITIONS);
   const resultsStoreRef = useRef({});
+  const athletesRef = useRef([]);
   const [activeCompId, setActiveCompId] = useState(null);
   const [calMode, setCalMode] = useState("view");
   const [initialCompFilter, setInitialCompFilter] = useState(null);
@@ -51,11 +52,13 @@ export default function App() {
       if (compRes && resRes && athRes) {
         const comps = JSON.parse(compRes.value);
         const res = JSON.parse(resRes.value);
+        const ath = JSON.parse(athRes.value);
         setCompetitions(comps);
         setResultsStore(res);
-        setAthletes(JSON.parse(athRes.value));
+        setAthletes(ath);
         competitionsRef.current = comps;
         resultsStoreRef.current = res;
+        athletesRef.current = ath;
       } else {
         const seed = buildDefaultSeed();
         setCompetitions(DEFAULT_COMPETITIONS);
@@ -63,6 +66,7 @@ export default function App() {
         setAthletes(seed.athletes);
         competitionsRef.current = DEFAULT_COMPETITIONS;
         resultsStoreRef.current = seed.results;
+        athletesRef.current = seed.athletes;
         await storage.set("competitions-list", JSON.stringify(DEFAULT_COMPETITIONS));
         await storage.set("results-store", JSON.stringify(seed.results));
         await storage.set("athletes-list", JSON.stringify(seed.athletes));
@@ -82,6 +86,7 @@ export default function App() {
     await storage.set("results-store", JSON.stringify(store));
   }
   async function persistAthletes(list) {
+    athletesRef.current = list;
     setAthletes(list);
     await storage.set("athletes-list", JSON.stringify(list));
   }
@@ -98,13 +103,13 @@ export default function App() {
     return id;
   }
   function saveBlock(compId, rawBlock) {
-    const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletes);
+    const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletesRef.current, rawBlock.gender);
     persistAthletes(registry);
     const current = resultsStoreRef.current[compId] || [];
     persistResults({ ...resultsStoreRef.current, [compId]: [...current, { disciplineId: rawBlock.disciplineId, gender: rawBlock.gender, round: rawBlock.round, entries }] });
   }
   function updateBlock(compId, index, rawBlock) {
-    const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletes);
+    const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletesRef.current, rawBlock.gender);
     persistAthletes(registry);
     const current = [...(resultsStoreRef.current[compId] || [])];
     current[index] = { disciplineId: rawBlock.disciplineId, gender: rawBlock.gender, round: rawBlock.round, entries };
@@ -113,6 +118,12 @@ export default function App() {
   function deleteBlock(compId, index) {
     const current = (resultsStoreRef.current[compId] || []).filter((_, i) => i !== index);
     persistResults({ ...resultsStoreRef.current, [compId]: current });
+  }
+  async function deleteCompetition(compId) {
+    await persistCompetitions(competitionsRef.current.filter((c) => c.id !== compId));
+    const newResults = { ...resultsStoreRef.current };
+    delete newResults[compId];
+    await persistResults(newResults);
   }
   async function restoreBackup(payload) {
     await persistCompetitions(payload.competitions);
@@ -150,7 +161,36 @@ export default function App() {
     const newBlock = { disciplineId: payload.disciplineId, gender: payload.gender, round: payload.round, entries: sorted };
     const newBlocks = idx === -1 ? [...currentBlocks, newBlock] : currentBlocks.map((b, i) => (i === idx ? newBlock : b));
     await persistResults({ ...resultsStoreRef.current, [compId]: newBlocks });
+
+    // renseigne le sexe de l'athlète si ce n'était pas encore fait
+    const athlete = athletesRef.current.find((a) => a.id === payload.athleteId);
+    if (athlete && !athlete.gender) {
+      await persistAthletes(athletesRef.current.map((a) => (a.id === payload.athleteId ? { ...a, gender: payload.gender } : a)));
+    }
     return compId;
+  }
+
+  async function setAthleteGender(athleteId, newGender) {
+    await persistAthletes(athletesRef.current.map((a) => (a.id === athleteId ? { ...a, gender: newGender } : a)));
+  }
+
+  /* Supprime uniquement l'entrée d'un athlète dans un bloc (discipline +
+     sexe + tour) donné d'une compétition, sans toucher aux autres athlètes
+     du même bloc. Supprime le bloc entier s'il ne reste plus personne. */
+  async function deleteAthletePerformance(compId, disciplineId, genderKey, round, athleteId) {
+    const blocks = resultsStoreRef.current[compId] || [];
+    const idx = blocks.findIndex((b) => b.disciplineId === disciplineId && b.gender === genderKey && roundKey(b.round) === roundKey(round));
+    if (idx === -1) return;
+    const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
+    const remaining = blocks[idx].entries.filter((e) => e.athleteId !== athleteId);
+    let newBlocks;
+    if (remaining.length === 0) {
+      newBlocks = blocks.filter((_, i) => i !== idx);
+    } else {
+      const resorted = remaining.sort((a, b) => compareMarks(discipline, a.mark, b.mark)).map((e, i) => ({ ...e, place: i + 1 }));
+      newBlocks = blocks.map((b, i) => (i === idx ? { ...b, entries: resorted } : b));
+    }
+    await persistResults({ ...resultsStoreRef.current, [compId]: newBlocks });
   }
 
   const activeComp = competitions.find((c) => c.id === activeCompId) || null;
@@ -202,6 +242,7 @@ export default function App() {
             onSaveBlock={(block) => saveBlock(activeComp.id, block)}
             onUpdateBlock={(i, block) => updateBlock(activeComp.id, i, block)}
             onDeleteBlock={(i) => deleteBlock(activeComp.id, i)}
+            onDeleteEntry={(disciplineId2, gender2, round2, athleteId) => deleteAthletePerformance(activeComp.id, disciplineId2, gender2, round2, athleteId)}
             onToggleComplete={() => toggleComplete(activeComp.id)}
           />
         ) : (
@@ -212,6 +253,7 @@ export default function App() {
             onOpen={(id, mode) => openCompetition(id, mode)}
             onToggleFollow={toggleFollow}
             onAddCompetition={addCompetition}
+            onDeleteCompetition={deleteCompetition}
           />
         )
       ) : (
@@ -248,6 +290,8 @@ export default function App() {
             openCompetition(compId, "view", disciplineId2, gender2, round2);
           }}
           onAddPerformance={addAthletePerformance}
+          onSetGender={setAthleteGender}
+          onDeletePerformance={(compId, disciplineId2, gender2, round2) => deleteAthletePerformance(compId, disciplineId2, gender2, round2, athleteProfileId)}
         />
       )}
     </div>
