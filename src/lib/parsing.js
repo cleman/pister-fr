@@ -240,10 +240,45 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
 
     const rest = cols.filter((_, i) => i !== discIdx && i !== dateIdx && i !== markIdx);
     const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c));
-    const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").trim();
-    const club = candidates.length >= 2 ? candidates[candidates.length - 2].trim() : "";
+    const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*$/, "").trim();
+    const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*$/, "").trim() : "";
 
     rows.push({ disciplineId, date, mark, wind, competition, club });
+  });
+  return rows;
+}
+
+/* Repli pour un texte qui ne mentionne la discipline nulle part (ex. bilan
+   annuel d'une seule épreuve, copié depuis la fiche "meilleures perfs par
+   année" de la FFA) : la discipline est fournie explicitement plutôt que
+   déduite du texte. Reconnaît aussi une éventuelle colonne "année" seule
+   (redondante avec la date complète) sans la confondre avec une marque. */
+export function parseSingleDisciplineHistoryText(text, discipline, referenceYear) {
+  const year = referenceYear || new Date().getFullYear();
+  const rows = [];
+  (text || "").split(/\r?\n+/).forEach((line) => {
+    const cols = line.split(/\t+|\s{2,}/).map((c) => c.trim()).filter(Boolean);
+    if (cols.length < 2) return;
+
+    let dateIdx = -1, date = null;
+    for (let i = 0; i < cols.length; i++) {
+      if (isDateLike(cols[i])) { const parsed = parseFlexibleDate(cols[i], year); if (parsed) { dateIdx = i; date = parsed; break; } }
+    }
+
+    let markIdx = -1, mark = null, wind = null;
+    for (let i = 0; i < cols.length; i++) {
+      if (i === dateIdx) continue;
+      const m = parseMarkToken(discipline, cols[i]);
+      if (m !== null && m > 0) { markIdx = i; mark = m; wind = extractWind(cols[i]); break; }
+    }
+    if (mark === null) return;
+
+    const rest = cols.filter((_, i) => i !== dateIdx && i !== markIdx);
+    const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c) && !/^\d{4}$/.test(c.trim()));
+    const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*$/, "").trim();
+    const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*$/, "").trim() : "";
+
+    rows.push({ disciplineId: discipline.id, date, mark, wind, competition, club });
   });
   return rows;
 }

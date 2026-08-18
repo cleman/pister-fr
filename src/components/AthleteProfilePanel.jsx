@@ -70,11 +70,14 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
                   <button
                     key={key}
                     onClick={() => setHistoryFilter(active ? null : key)}
-                    className="focus-ring w-full flex items-center justify-between text-sm py-1 px-2 -mx-2 rounded-sm"
+                    className="focus-ring w-full text-left py-1.5 px-2 -mx-2 rounded-sm"
                     style={{ background: active ? "var(--paper)" : "transparent" }}
                   >
-                    <span style={{ color: active ? "var(--track)" : "var(--ink)" }}>{disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}</span></span>
-                    <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>{formatMark(disc, b.mark)}</span>
+                    <div className="flex items-center justify-between text-sm">
+                      <span style={{ color: active ? "var(--track)" : "var(--ink)" }}>{disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}</span></span>
+                      <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>{formatMark(disc, b.mark)}</span>
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--steel)" }}>{b.date ? new Date(b.date).toLocaleDateString("fr-FR") : ""}{b.date && b.compName ? " · " : ""}{b.compName}</p>
                   </button>
                 );
               })}

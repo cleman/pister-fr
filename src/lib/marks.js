@@ -27,6 +27,9 @@ export function parseMarkToken(discipline, raw) {
   // notation française : "6m98" = 6.98 (le 'm' sert de séparateur décimal,
   // comme l'apostrophe pour les temps) — pas un simple suffixe d'unité.
   const cleaned = token.replace(/m/i, ".").replace(",", ".");
+  // une distance s'écrit toujours avec décimales (6m98 -> 6.98) ; un entier
+  // nu (ex: une année "2026") ne doit jamais être pris pour une marque.
+  if (discipline.type === "distance" && !/\./.test(cleaned)) return null;
   const v = parseFloat(cleaned);
   return isNaN(v) ? null : v;
 }

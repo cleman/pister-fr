@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus } from "lucide-react";
 import { DISCIPLINES, DISCIPLINE_ALIASES, getLabel } from "../data/disciplines";
 import MeasurementField from "./MeasurementField";
-import { parseAthleteHistoryText } from "../lib/parsing";
+import { parseAthleteHistoryText, parseSingleDisciplineHistoryText } from "../lib/parsing";
 
 const ROUND_CHOICES = [
   { type: "finale", heat: null, label: "Finale" },
@@ -27,6 +27,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   const [msg, setMsg] = useState("");
 
   const [bulkText, setBulkText] = useState("");
+  const [bulkDisciplineId, setBulkDisciplineId] = useState(""); // "" = détection automatique multi-discipline
   const [bulkRows, setBulkRows] = useState(null);
   const [bulkError, setBulkError] = useState("");
   const [bulkInfo, setBulkInfo] = useState("");
@@ -55,11 +56,15 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
 
   function analyzeBulk() {
     const totalLines = bulkText.split(/\r?\n+/).map((l) => l.trim()).filter(Boolean).length;
-    const rows = parseAthleteHistoryText(bulkText, DISCIPLINES, DISCIPLINE_ALIASES);
+    const rows = bulkDisciplineId
+      ? parseSingleDisciplineHistoryText(bulkText, DISCIPLINES.find((d) => d.id === bulkDisciplineId))
+      : parseAthleteHistoryText(bulkText, DISCIPLINES, DISCIPLINE_ALIASES);
     setBulkError("");
     setBulkInfo("");
     if (!rows.length) {
-      setBulkError("Aucune ligne reconnue. Assure-toi que chaque ligne contient un libellé de discipline reconnu (ex. \"100m\", \"Longueur\", \"Poids\"...) et une marque.");
+      setBulkError(bulkDisciplineId
+        ? "Aucune ligne reconnue. Vérifie qu'il y a bien une date et une marque sur chaque ligne."
+        : "Aucune ligne reconnue. Assure-toi que chaque ligne contient un libellé de discipline reconnu (ex. \"100m\", \"Longueur\", \"Poids\"...) et une marque — ou choisis une discipline unique ci-dessus si le texte ne la mentionne pas.");
       setBulkRows(null);
       return;
     }
@@ -183,6 +188,15 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
           <p className="text-xs" style={{ color: "var(--steel)" }}>
             Colle l'historique de performances (ex. copié depuis la fiche athlète du site de la FFA). Chaque ligne doit contenir une discipline reconnue, une marque, et idéalement une date et le nom de la compétition. Le club est lu automatiquement quand la fiche source en contient un (ex. fiche de records), sinon le club actuel est proposé par défaut — modifiable ligne par ligne.
           </p>
+          <div>
+            <label className="font-mono text-[10px] uppercase tracking-wide block mb-1" style={{ color: "var(--steel)" }}>
+              Si le texte ne mentionne jamais la discipline (ex. bilan annuel d'une seule épreuve) :
+            </label>
+            <select className="field" value={bulkDisciplineId} onChange={(e) => setBulkDisciplineId(e.target.value)}>
+              <option value="">Détection automatique (texte multi-disciplines)</option>
+              {DISCIPLINES.map((d) => (<option key={d.id} value={d.id}>Discipline unique : {getLabel(d, gender)}</option>))}
+            </select>
+          </div>
           <textarea
             className="field font-mono text-xs"
             rows={6}
