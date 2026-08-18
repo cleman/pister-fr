@@ -165,6 +165,15 @@ function parseFlexibleDate(raw, referenceYear) {
     if (y.length === 2) y = (parseInt(y, 10) > 50 ? "19" : "20") + y;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
+  // "2 Mars 2008" (jour + mois en lettres + année) — format de la fiche de records
+  const frWithYear = token.match(/^(\d{1,2})\s+([a-zà-ÿ.]+)\s+(\d{4})$/i);
+  if (frWithYear) {
+    const day = frWithYear[1].padStart(2, "0");
+    const key = normalizeLabel(frWithYear[2]).replace(/\.$/, "").slice(0, 5);
+    const monthNum = FR_MONTHS[key] || FR_MONTHS[key.slice(0, 4)] || FR_MONTHS[key.slice(0, 3)];
+    if (monthNum) return `${frWithYear[3]}-${String(monthNum).padStart(2, "0")}-${day}`;
+  }
+  // "1 Août" (jour + mois en lettres, sans année) — format du bilan de saison
   const frMatch = token.match(/^(\d{1,2})\s+([a-zà-ÿ.]+)$/i);
   if (frMatch) {
     const day = frMatch[1].padStart(2, "0");
@@ -175,7 +184,10 @@ function parseFlexibleDate(raw, referenceYear) {
   return null;
 }
 
-const isDateLike = (s) => /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(s.trim()) || /^\d{1,2}\s+[a-zà-ÿ.]+\.?$/i.test(s.trim());
+const isDateLike = (s) => {
+  const t = s.trim();
+  return /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(t) || /^\d{1,2}\s+[a-zà-ÿ.]+(\s+\d{4})?$/i.test(t);
+};
 const isRoundLike = (s) => /^(final|s[ée]rie|demi|qualif|h\.?\s*stade)/i.test(s.trim());
 const isLevelLike = (s) => /^(N\d|I[AB]|R\d|D\d|IR\d)$/i.test(s.trim());
 const isPlaceLike = (s) => /^\d{1,3}(\s*\([^)]*\))?$/.test(s.trim());
@@ -193,6 +205,18 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
     for (let i = 0; i < cols.length; i++) {
       const norm = normalizeDisciplineLabel(cols[i]);
       if (aliases[norm]) { disciplineId = aliases[norm]; discIdx = i; break; }
+    }
+    if (!disciplineId) {
+      // repli : plus long préfixe connu (ex. "Heptathlon JSF" -> "heptathlon")
+      let bestLen = 0;
+      for (let i = 0; i < cols.length; i++) {
+        const norm = normalizeDisciplineLabel(cols[i]);
+        for (const key of Object.keys(aliases)) {
+          if (norm.startsWith(key + " ") && key.length > bestLen) {
+            disciplineId = aliases[key]; discIdx = i; bestLen = key.length;
+          }
+        }
+      }
     }
     if (!disciplineId) return;
     const discipline = disciplinesList.find((d) => d.id === disciplineId);

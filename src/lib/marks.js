@@ -16,14 +16,19 @@ export function formatMark(discipline, value) {
 
 export function parseMarkToken(discipline, raw) {
   if (discipline.type === "time") return parseTimeToken(raw);
+  if (discipline.type === "points") {
+    const m = String(raw || "").trim().match(/^[\d\s]+/);
+    if (!m) return null;
+    const digits = m[0].replace(/\s+/g, "");
+    const v = parseInt(digits, 10);
+    return isNaN(v) || v <= 0 ? null : v;
+  }
   const token = String(raw || "").trim().split(/\s+/)[0];
   // notation française : "6m98" = 6.98 (le 'm' sert de séparateur décimal,
   // comme l'apostrophe pour les temps) — pas un simple suffixe d'unité.
   const cleaned = token.replace(/m/i, ".").replace(",", ".");
   const v = parseFloat(cleaned);
-  if (isNaN(v)) return null;
-  if (discipline.type === "points") return Math.round(v);
-  return v;
+  return isNaN(v) ? null : v;
 }
 
 /* renvoie un nombre négatif si a est meilleur que b, positif sinon —

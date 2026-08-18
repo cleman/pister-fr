@@ -76,10 +76,12 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
     for (const row of bulkRows) {
       const disc = DISCIPLINES.find((d) => d.id === row.disciplineId);
       if (!disc) continue;
-      const normName = (row.competition || "").trim().toLowerCase();
-      let compId = nameToId[normName];
+      const key = `${(row.competition || "").trim().toLowerCase()}::${row.date || ""}`;
+      let compId = nameToId[key];
       if (!compId) {
-        const existing = competitions.find((c) => c.name.trim().toLowerCase() === normName);
+        const existing = competitions.find(
+          (c) => c.name.trim().toLowerCase() === (row.competition || "").trim().toLowerCase() && c.date === row.date
+        );
         if (existing) compId = existing.id;
       }
       const usedId = await onAddPerformance({
@@ -90,7 +92,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
         newCompetition: compId ? null : { name: row.competition || "Compétition (à préciser)", date: row.date || new Date().toISOString().slice(0, 10), tier: "circuit" },
         disciplineId: row.disciplineId, gender, round: ROUND_CHOICES[0], mark: row.mark, wind: row.wind,
       });
-      nameToId[normName] = usedId;
+      nameToId[key] = usedId;
     }
     setBusy(false);
     setMsg(`${bulkRows.length} performance(s) ajoutée(s).`);

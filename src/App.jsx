@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Flag } from "lucide-react";
 
 import Header from "./components/Header";
@@ -28,6 +28,14 @@ export default function App() {
   const [competitions, setCompetitions] = useState(DEFAULT_COMPETITIONS);
   const [resultsStore, setResultsStore] = useState({});
   const [athletes, setAthletes] = useState([]);
+  // Miroirs synchrones de l'état ci-dessus. Nécessaires car plusieurs
+  // écritures peuvent s'enchaîner rapidement (ex. import en masse) sans
+  // laisser le temps à React de re-rendre entre deux appels : lire
+  // directement `competitions`/`resultsStore` dans ce cas donnerait une
+  // valeur obsolète (celle d'avant le début de la boucle), et chaque
+  // écriture écraserait la précédente au lieu de s'accumuler.
+  const competitionsRef = useRef(DEFAULT_COMPETITIONS);
+  const resultsStoreRef = useRef({});
   const [activeCompId, setActiveCompId] = useState(null);
   const [calMode, setCalMode] = useState("view");
   const [initialCompFilter, setInitialCompFilter] = useState(null);
@@ -41,14 +49,20 @@ export default function App() {
       const athRes = await storage.get("athletes-list");
 
       if (compRes && resRes && athRes) {
-        setCompetitions(JSON.parse(compRes.value));
-        setResultsStore(JSON.parse(resRes.value));
+        const comps = JSON.parse(compRes.value);
+        const res = JSON.parse(resRes.value);
+        setCompetitions(comps);
+        setResultsStore(res);
         setAthletes(JSON.parse(athRes.value));
+        competitionsRef.current = comps;
+        resultsStoreRef.current = res;
       } else {
         const seed = buildDefaultSeed();
         setCompetitions(DEFAULT_COMPETITIONS);
         setResultsStore(seed.results);
         setAthletes(seed.athletes);
+        competitionsRef.current = DEFAULT_COMPETITIONS;
+        resultsStoreRef.current = seed.results;
         await storage.set("competitions-list", JSON.stringify(DEFAULT_COMPETITIONS));
         await storage.set("results-store", JSON.stringify(seed.results));
         await storage.set("athletes-list", JSON.stringify(seed.athletes));
@@ -58,10 +72,12 @@ export default function App() {
   }, []);
 
   async function persistCompetitions(list) {
+    competitionsRef.current = list;
     setCompetitions(list);
     await storage.set("competitions-list", JSON.stringify(list));
   }
   async function persistResults(store) {
+    resultsStoreRef.current = store;
     setResultsStore(store);
     await storage.set("results-store", JSON.stringify(store));
   }
@@ -71,32 +87,32 @@ export default function App() {
   }
 
   function toggleFollow(compId) {
-    persistCompetitions(competitions.map((c) => (c.id === compId ? { ...c, following: !c.following } : c)));
+    persistCompetitions(competitionsRef.current.map((c) => (c.id === compId ? { ...c, following: !c.following } : c)));
   }
   function toggleComplete(compId) {
-    persistCompetitions(competitions.map((c) => (c.id === compId ? { ...c, manualComplete: !c.manualComplete } : c)));
+    persistCompetitions(competitionsRef.current.map((c) => (c.id === compId ? { ...c, manualComplete: !c.manualComplete } : c)));
   }
   async function addCompetition(data) {
     const id = uid();
-    await persistCompetitions([...competitions, { id, following: false, manualComplete: false, ...data }]);
+    await persistCompetitions([...competitionsRef.current, { id, following: false, manualComplete: false, ...data }]);
     return id;
   }
   function saveBlock(compId, rawBlock) {
     const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletes);
     persistAthletes(registry);
-    const current = resultsStore[compId] || [];
-    persistResults({ ...resultsStore, [compId]: [...current, { disciplineId: rawBlock.disciplineId, gender: rawBlock.gender, round: rawBlock.round, entries }] });
+    const current = resultsStoreRef.current[compId] || [];
+    persistResults({ ...resultsStoreRef.current, [compId]: [...current, { disciplineId: rawBlock.disciplineId, gender: rawBlock.gender, round: rawBlock.round, entries }] });
   }
   function updateBlock(compId, index, rawBlock) {
     const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletes);
     persistAthletes(registry);
-    const current = [...(resultsStore[compId] || [])];
+    const current = [...(resultsStoreRef.current[compId] || [])];
     current[index] = { disciplineId: rawBlock.disciplineId, gender: rawBlock.gender, round: rawBlock.round, entries };
-    persistResults({ ...resultsStore, [compId]: current });
+    persistResults({ ...resultsStoreRef.current, [compId]: current });
   }
   function deleteBlock(compId, index) {
-    const current = (resultsStore[compId] || []).filter((_, i) => i !== index);
-    persistResults({ ...resultsStore, [compId]: current });
+    const current = (resultsStoreRef.current[compId] || []).filter((_, i) => i !== index);
+    persistResults({ ...resultsStoreRef.current, [compId]: current });
   }
   async function restoreBackup(payload) {
     await persistCompetitions(payload.competitions);
@@ -116,7 +132,7 @@ export default function App() {
       compId = await addCompetition(payload.newCompetition);
     }
     const discipline = DISCIPLINES.find((d) => d.id === payload.disciplineId);
-    const currentBlocks = resultsStore[compId] || [];
+    const currentBlocks = resultsStoreRef.current[compId] || [];
     const idx = currentBlocks.findIndex(
       (b) => b.disciplineId === payload.disciplineId && b.gender === payload.gender && roundKey(b.round) === roundKey(payload.round)
     );
@@ -133,7 +149,7 @@ export default function App() {
       .map((e, i) => ({ ...e, place: i + 1 }));
     const newBlock = { disciplineId: payload.disciplineId, gender: payload.gender, round: payload.round, entries: sorted };
     const newBlocks = idx === -1 ? [...currentBlocks, newBlock] : currentBlocks.map((b, i) => (i === idx ? newBlock : b));
-    await persistResults({ ...resultsStore, [compId]: newBlocks });
+    await persistResults({ ...resultsStoreRef.current, [compId]: newBlocks });
     return compId;
   }
 
