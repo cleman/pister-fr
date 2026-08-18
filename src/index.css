@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #14171f;
+  --paper: #eef1f2;
+  --card: #ffffff;
+  --track: #e2481f;
+  --lane-yellow: #f2b705;
+  --steel: #5b6472;
+  --line: #d7dce0;
+  --font-display: "Oswald", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--paper);
+}
+
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.row-hover:hover { background: #fff; }
+.row-hover:hover .accent-bar { opacity: 1; }
+.chip { transition: all 0.15s ease; }
+.focus-ring:focus-visible { outline: 2px solid var(--track); outline-offset: 2px; }
+
+input.field, select.field, textarea.field {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+}
+input.field:focus, select.field:focus, textarea.field:focus {
+  outline: 2px solid var(--track);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
