@@ -144,10 +144,11 @@ un certain volume) en réécrivant `src/lib/storage.js`.
 
 ## Reste à faire (connu)
 
-- Autres disciplines (sauts, lancers, épreuves combinées) — le modèle de données le permet, il "suffit" d'étendre `data/disciplines.js` et d'adapter `TimeField`/`ResultsTable` pour un type "distance"/"points" en plus du type "temps".
+- Cross-country — modèle différent (distance non standardisée, souvent classement par équipe en plus de l'individuel), volontairement pas encore traité.
 - Autres pays / classements internationaux.
 - Ex-aequo : le classement les trie correctement mais leur donne des rangs séquentiels plutôt qu'un affichage "2 ex-aequo".
 - Édition des métadonnées d'une compétition existante (nom/date/lieu) — seul l'ajout est possible pour l'instant.
 - Historique des modifications (qui a modifié quoi) — utile une fois plusieurs éditeurs actifs.
+- Le parseur de collage d'historique athlète (`parseAthleteHistoryText`, dans `lib/parsing.js`) est une heuristique v1 — à affiner avec un vrai export d'un site source sous les yeux, comme on l'a fait pour le collage de résultats de compétition.
 - Migration éventuelle vers un schéma relationnel complet (tables séparées `athletes`/`competitions`/`results` plutôt que des blobs JSON) si le site grossit et a besoin de requêtes plus riches.
 - Connecter un outil d'analytics (Umami/Plausible) pour les statistiques de visite — voir section ci-dessus.

@@ -60,7 +60,7 @@ export function buildDefaultSeed() {
       entries: block.entries.map((e, i) => {
         const key = normalizeName(e.name);
         if (!athletesMap[key]) athletesMap[key] = { id: uid(), canonicalName: e.name, club: e.club };
-        return { place: i + 1, name: e.name, club: e.club, timeSeconds: parseTimeString(e.time), wind: null, athleteId: athletesMap[key].id };
+        return { place: i + 1, name: e.name, club: e.club, mark: parseTimeString(e.time), wind: null, athleteId: athletesMap[key].id };
       }),
     }));
   });

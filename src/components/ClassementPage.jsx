@@ -3,6 +3,17 @@ import { Calendar, ChevronLeft, ChevronRight, Info, Trophy, Wind } from "lucide-
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { computeGlobalRanking } from "../lib/ranking";
 
+function headline(discipline) {
+  if (discipline.type === "time") return "Qui court le plus vite en France\u00a0?";
+  if (discipline.type === "distance") return "Qui va le plus loin en France\u00a0?";
+  return "Qui totalise le plus de points en France\u00a0?";
+}
+function markWord(discipline) {
+  if (discipline.type === "time") return "Meilleur temps";
+  if (discipline.type === "distance") return "Meilleure distance";
+  return "Meilleur total";
+}
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function ClassementPage({
@@ -11,7 +22,7 @@ export default function ClassementPage({
 }) {
   const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
   const fullRanking = useMemo(
-    () => computeGlobalRanking(disciplineId, gender, resultsStore, athletes, competitions),
+    () => computeGlobalRanking(discipline, gender, resultsStore, athletes, competitions),
     [disciplineId, gender, resultsStore, athletes, competitions]
   );
   const leader = fullRanking[0] || null;
@@ -30,14 +41,14 @@ export default function ClassementPage({
       <section className="max-w-5xl mx-auto px-6 pt-10 pb-8 grid md:grid-cols-3 gap-8 items-end">
         <div className="md:col-span-2">
           <p className="font-mono text-xs uppercase tracking-widest mb-3" style={{ color: "var(--track)" }}>Classement national · athlétisme</p>
-          <h1 className="font-display font-semibold leading-none mb-4" style={{ color: "var(--ink)", fontSize: "clamp(2rem, 4.5vw, 3.2rem)" }}>Qui court le plus vite en France&nbsp;?</h1>
+          <h1 className="font-display font-semibold leading-none mb-4" style={{ color: "var(--ink)", fontSize: "clamp(2rem, 4.5vw, 3.2rem)" }}>{headline(discipline)}</h1>
           <p className="max-w-md" style={{ color: "var(--steel)" }}>Classement calculé à partir des résultats saisis dans le Calendrier. Sélectionnez une discipline et un sexe, puis ouvrez une fiche pour le détail.</p>
         </div>
         <div className="rounded-md p-5" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
-          <p className="font-mono text-xs uppercase tracking-wider mb-2" style={{ color: "var(--steel)" }}>Meilleur temps · {getLabel(discipline, gender)} {gender === "H" ? "Hommes" : "Femmes"}</p>
+          <p className="font-mono text-xs uppercase tracking-wider mb-2" style={{ color: "var(--steel)" }}>{markWord(discipline)} · {getLabel(discipline, gender)} {gender === "H" ? "Hommes" : "Femmes"}</p>
           {leader ? (
             <>
-              <p className="font-mono font-bold" style={{ color: "var(--ink)", fontSize: "2.6rem", lineHeight: 1 }}>{leader.timeLabel}</p>
+              <p className="font-mono font-bold" style={{ color: "var(--ink)", fontSize: "2.6rem", lineHeight: 1 }}>{leader.markLabel}</p>
               <p className="mt-2 text-sm" style={{ color: "var(--ink)" }}>{leader.name} <span style={{ color: "var(--steel)" }}>· {leader.club}</span></p>
             </>
           ) : (
@@ -92,7 +103,7 @@ export default function ClassementPage({
                   {a.date && <span className="flex items-center gap-1"><Calendar size={12} />{new Date(a.date).toLocaleDateString("fr-FR")}</span>}
                   {discipline.hasWind && a.wind !== null && a.wind !== undefined && (<span className="flex items-center gap-1"><Wind size={12} />{a.wind > 0 ? `+${a.wind.toFixed(1)}` : a.wind.toFixed(1)}</span>)}
                 </div>
-                <div className="font-mono font-semibold text-lg shrink-0" style={{ color: "var(--ink)" }}>{a.timeLabel}</div>
+                <div className="font-mono font-semibold text-lg shrink-0" style={{ color: "var(--ink)" }}>{a.markLabel}</div>
               </button>
             ))}
           </div>

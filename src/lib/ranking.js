@@ -1,4 +1,4 @@
-import { formatTime } from "./time";
+import { formatMark, compareMarks, isBetterMark } from "./marks";
 
 export const TODAY = new Date();
 
@@ -21,7 +21,7 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
           rows.push({
             compId, compName: comp.name, date: comp.date,
             disciplineId: block.disciplineId, gender: block.gender, round: block.round,
-            place: e.place, timeSeconds: e.timeSeconds, wind: e.wind, club: e.club,
+            place: e.place, mark: e.mark, wind: e.wind, club: e.club,
           });
         }
       });
@@ -33,19 +33,20 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
 
 /* classement global (toutes compétitions et tours confondus) à partir des
    vraies données saisies : meilleure marque de chaque athlète pour une
-   discipline + sexe donnés */
-export function computeGlobalRanking(disciplineId, gender, resultsStore, athletes, competitions) {
+   discipline + sexe donnés. `discipline` est l'objet complet (pas juste
+   l'id) car le sens de "meilleur" dépend de son type. */
+export function computeGlobalRanking(discipline, gender, resultsStore, athletes, competitions) {
   const bestByAthlete = {};
   Object.entries(resultsStore).forEach(([compId, blocks]) => {
     (blocks || []).forEach((block) => {
-      if (block.disciplineId !== disciplineId || block.gender !== gender) return;
+      if (block.disciplineId !== discipline.id || block.gender !== gender) return;
       block.entries.forEach((e) => {
         const cur = bestByAthlete[e.athleteId];
-        if (!cur || e.timeSeconds < cur.timeSeconds) {
+        if (!cur || isBetterMark(discipline, e.mark, cur.mark)) {
           const comp = competitions.find((c) => c.id === compId);
           bestByAthlete[e.athleteId] = {
             athleteId: e.athleteId,
-            timeSeconds: e.timeSeconds,
+            mark: e.mark,
             wind: e.wind ?? null,
             club: e.club,
             compId,
@@ -59,6 +60,6 @@ export function computeGlobalRanking(disciplineId, gender, resultsStore, athlete
   });
   return Object.values(bestByAthlete)
     .map((b) => ({ ...b, name: (athletes.find((a) => a.id === b.athleteId) || {}).canonicalName || "?" }))
-    .sort((a, b) => a.timeSeconds - b.timeSeconds)
-    .map((r, i) => ({ ...r, rank: i + 1, timeLabel: formatTime(disciplineId, r.timeSeconds) }));
+    .sort((a, b) => compareMarks(discipline, a.mark, b.mark))
+    .map((r, i) => ({ ...r, rank: i + 1, markLabel: formatMark(discipline, r.mark) }));
 }

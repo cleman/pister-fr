@@ -1,19 +1,62 @@
-import React, { useEffect, useState } from "react";
-import { ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Download, ShieldCheck, Trash2, Upload, UserPlus } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
-export default function AdminPage({ competitions, resultsStore, athletes }) {
+export default function AdminPage({ competitions, resultsStore, athletes, onRestoreBackup }) {
   const [invites, setInvites] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("editor");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [importError, setImportError] = useState("");
+  const [importMsg, setImportMsg] = useState("");
+  const fileRef = useRef(null);
 
   const totalResults = Object.values(resultsStore).reduce(
     (sum, blocks) => sum + (blocks || []).reduce((s, b) => s + b.entries.length, 0),
     0
   );
+
+  function handleExport() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      competitions,
+      resultsStore,
+      athletes,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `piste-fr-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setImportError("");
+    setImportMsg("");
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      if (!payload.competitions || !payload.resultsStore || !payload.athletes) {
+        throw new Error("Fichier invalide : il doit contenir competitions, resultsStore et athletes.");
+      }
+      const confirmed = window.confirm(
+        `Ceci va REMPLACER toutes les données actuelles par celles du fichier (sauvegarde du ${payload.exportedAt ? new Date(payload.exportedAt).toLocaleString("fr-FR") : "date inconnue"}). Continuer ?`
+      );
+      if (!confirmed) return;
+      await onRestoreBackup(payload);
+      setImportMsg("Données restaurées avec succès.");
+    } catch (err) {
+      setImportError("Import impossible : " + (err.message || String(err)));
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function refresh() {
     setLoading(true);
@@ -63,10 +106,29 @@ export default function AdminPage({ competitions, resultsStore, athletes }) {
       <h1 className="font-display font-semibold text-3xl mb-8" style={{ color: "var(--ink)" }}>Tableau de bord</h1>
 
       {/* STATS */}
-      <div className="grid grid-cols-3 gap-3 mb-10">
+      <div className="grid grid-cols-3 gap-3 mb-4">
         <Stat label="Athlètes" value={athletes.length} />
         <Stat label="Compétitions" value={competitions.length} />
         <Stat label="Résultats saisis" value={totalResults} />
+      </div>
+
+      {/* SAUVEGARDE */}
+      <div className="rounded-md p-4 mb-10" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
+        <p className="font-mono text-xs uppercase tracking-wider mb-2" style={{ color: "var(--steel)" }}>Sauvegarde</p>
+        <p className="text-xs mb-3" style={{ color: "var(--steel)" }}>
+          Supabase (plan gratuit) ne fait pas de sauvegarde automatique. Exporte régulièrement un fichier de secours.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={handleExport} className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--ink)", color: "#fff" }}>
+            <Download size={13} /> Exporter en JSON
+          </button>
+          <label className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm cursor-pointer" style={{ border: "1px solid var(--track)", color: "var(--track)" }}>
+            <Upload size={13} /> Restaurer depuis un fichier
+            <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
+          </label>
+        </div>
+        {importError && <p className="text-xs font-mono mt-2" style={{ color: "var(--track)" }}>{importError}</p>}
+        {importMsg && <p className="text-xs font-mono mt-2" style={{ color: "var(--lane-yellow)" }}>{importMsg}</p>}
       </div>
 
       <p className="font-mono text-xs mb-8" style={{ color: "var(--steel)" }}>

@@ -1,6 +1,6 @@
 import React from "react";
 import { DISCIPLINES } from "../data/disciplines";
-import { formatTime } from "../lib/time";
+import { formatMark } from "../lib/marks";
 
 export default function ResultsTable({ disciplineId, entries, onSelectAthlete }) {
   const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
@@ -17,7 +17,7 @@ export default function ResultsTable({ disciplineId, entries, onSelectAthlete })
           <span className="flex-1 font-display text-sm truncate" style={{ color: "var(--ink)" }}>{r.name}</span>
           <span className="text-xs hidden sm:block shrink-0" style={{ color: "var(--steel)" }}>{r.club}</span>
           <span className="font-mono font-semibold shrink-0" style={{ color: "var(--ink)" }}>
-            {formatTime(disciplineId, r.timeSeconds)}
+            {formatMark(discipline, r.mark)}
             {discipline && discipline.hasWind && r.wind !== null && r.wind !== undefined && (
               <span className="font-mono text-xs ml-1" style={{ color: "var(--steel)" }}>({r.wind > 0 ? "+" : ""}{r.wind.toFixed(1)})</span>
             )}

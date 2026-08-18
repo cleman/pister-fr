@@ -3,8 +3,9 @@ import { Plus, Trash2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { roundLabel } from "../lib/rounds";
 import { parseTextTable } from "../lib/parsing";
+import { compareMarks } from "../lib/marks";
 import NameField from "./NameField";
-import TimeField from "./TimeField";
+import MeasurementField from "./MeasurementField";
 import WindField from "./WindField";
 
 export default function ResultBlockForm({ initial, athletes, onSave, onCancel, lockedDisciplineId, lockedGender, lockedRound }) {
@@ -13,8 +14,8 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
   const [gender, setGender] = useState(lockedGender || (initial ? initial.gender : "H"));
   const [rows, setRows] = useState(
     initial && initial.entries.length
-      ? initial.entries.map((e, i) => ({ place: i + 1, name: e.name, club: e.club, timeSeconds: e.timeSeconds, wind: e.wind === undefined ? null : e.wind }))
-      : [{ place: 1, name: "", club: "", timeSeconds: null, wind: null }]
+      ? initial.entries.map((e, i) => ({ place: i + 1, name: e.name, club: e.club, mark: e.mark, wind: e.wind === undefined ? null : e.wind }))
+      : [{ place: 1, name: "", club: "", mark: null, wind: null }]
   );
   const [importError, setImportError] = useState("");
   const [pasteMode, setPasteMode] = useState(false);
@@ -23,17 +24,17 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
   const activeGender = isLocked ? lockedGender : gender;
   const activeDiscipline = DISCIPLINES.find((d) => d.id === activeDisciplineId);
 
-  function addRow() { setRows((r) => [...r, { place: r.length + 1, name: "", club: "", timeSeconds: null, wind: null }]); }
+  function addRow() { setRows((r) => [...r, { place: r.length + 1, name: "", club: "", mark: null, wind: null }]); }
   function updateRow(i, patch) { setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row))); }
   function removeRow(i) { setRows((r) => r.filter((_, idx) => idx !== i).map((row, idx) => ({ ...row, place: idx + 1 }))); }
 
   function handlePasteAnalyze() {
-    const parsed = parseTextTable(pasteText);
+    const parsed = parseTextTable(pasteText, activeDiscipline);
     if (!parsed.length) {
       setImportError("Aucune ligne reconnue dans le texte collé. Il faut au moins 2 espaces (ou une tabulation) entre chaque colonne.");
       return;
     }
-    setRows(parsed.map((p, i) => ({ place: p.place || i + 1, name: p.name || "", club: p.club || "", timeSeconds: p.timeSeconds, wind: p.wind === undefined ? null : p.wind })));
+    setRows(parsed.map((p, i) => ({ place: p.place || i + 1, name: p.name || "", club: p.club || "", mark: p.mark, wind: p.wind === undefined ? null : p.wind })));
     setImportError("");
     setPasteText("");
     setPasteMode(false);
@@ -41,12 +42,12 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
 
   function handleSave() {
     const clean = rows
-      .filter((r) => r.name.trim() && typeof r.timeSeconds === "number" && !isNaN(r.timeSeconds) && r.timeSeconds > 0)
-      .sort((a, b) => a.timeSeconds - b.timeSeconds)
-      .map((r, i) => ({ place: i + 1, name: r.name.trim(), club: r.club.trim(), timeSeconds: r.timeSeconds, wind: r.wind === undefined ? null : r.wind }));
+      .filter((r) => r.name.trim() && typeof r.mark === "number" && !isNaN(r.mark) && r.mark > 0)
+      .sort((a, b) => compareMarks(activeDiscipline, a.mark, b.mark))
+      .map((r, i) => ({ place: i + 1, name: r.name.trim(), club: r.club.trim(), mark: r.mark, wind: r.wind === undefined ? null : r.wind }));
     if (clean.length === 0) return;
     onSave({ disciplineId: activeDisciplineId, gender: activeGender, round: lockedRound, entries: clean });
-    if (!initial) setRows([{ place: 1, name: "", club: "", timeSeconds: null, wind: null }]);
+    if (!initial) setRows([{ place: 1, name: "", club: "", mark: null, wind: null }]);
   }
 
   return (
@@ -94,7 +95,7 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
             <span className="font-mono text-xs text-center w-6 shrink-0" style={{ color: "var(--steel)" }}>{row.place}</span>
             <NameField value={row.name} onChange={(v) => updateRow(i, { name: v })} athletes={athletes || []} />
             <input className="field flex-1 min-w-0" placeholder="Club" value={row.club} onChange={(e) => updateRow(i, { club: e.target.value })} />
-            <TimeField disciplineId={activeDisciplineId} valueSeconds={row.timeSeconds} flagged={row.flagged} onChange={(v) => updateRow(i, { timeSeconds: v, flagged: false })} />
+            <MeasurementField discipline={activeDiscipline} value={row.mark} flagged={row.flagged} onChange={(v) => updateRow(i, { mark: v, flagged: false })} />
             {activeDiscipline && activeDiscipline.hasWind && (
               <WindField value={row.wind} onChange={(v) => updateRow(i, { wind: v })} />
             )}

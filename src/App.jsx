@@ -12,6 +12,9 @@ import { storage } from "./lib/storage";
 import { useAuth } from "./lib/auth";
 import { uid } from "./lib/util";
 import { resolveBlockEntries } from "./lib/athletes";
+import { compareMarks } from "./lib/marks";
+import { roundKey } from "./lib/rounds";
+import { DISCIPLINES } from "./data/disciplines";
 import { DEFAULT_COMPETITIONS } from "./data/competitions";
 import { buildDefaultSeed } from "./data/seed";
 
@@ -73,8 +76,10 @@ export default function App() {
   function toggleComplete(compId) {
     persistCompetitions(competitions.map((c) => (c.id === compId ? { ...c, manualComplete: !c.manualComplete } : c)));
   }
-  function addCompetition(data) {
-    persistCompetitions([...competitions, { id: uid(), following: false, manualComplete: false, ...data }]);
+  async function addCompetition(data) {
+    const id = uid();
+    await persistCompetitions([...competitions, { id, following: false, manualComplete: false, ...data }]);
+    return id;
   }
   function saveBlock(compId, rawBlock) {
     const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletes);
@@ -92,6 +97,44 @@ export default function App() {
   function deleteBlock(compId, index) {
     const current = (resultsStore[compId] || []).filter((_, i) => i !== index);
     persistResults({ ...resultsStore, [compId]: current });
+  }
+  async function restoreBackup(payload) {
+    await persistCompetitions(payload.competitions);
+    await persistResults(payload.resultsStore);
+    await persistAthletes(payload.athletes);
+  }
+
+  /* Ajoute une performance pour un athlète déjà identifié, en créant la
+     compétition si besoin (competitionId absent) et/ou le bloc discipline/
+     sexe/tour s'il n'existe pas encore. Remplace l'entrée existante de cet
+     athlète dans le bloc si elle y était déjà (ré-import). Renvoie l'id de
+     la compétition utilisée (utile pour regrouper plusieurs lignes d'un
+     même import en masse sur la même compétition nouvellement créée). */
+  async function addAthletePerformance(payload) {
+    let compId = payload.competitionId;
+    if (!compId) {
+      compId = await addCompetition(payload.newCompetition);
+    }
+    const discipline = DISCIPLINES.find((d) => d.id === payload.disciplineId);
+    const currentBlocks = resultsStore[compId] || [];
+    const idx = currentBlocks.findIndex(
+      (b) => b.disciplineId === payload.disciplineId && b.gender === payload.gender && roundKey(b.round) === roundKey(payload.round)
+    );
+    const others = idx === -1 ? [] : currentBlocks[idx].entries.filter((e) => e.athleteId !== payload.athleteId);
+    const withNew = [...others, {
+      name: payload.athleteName,
+      club: payload.athleteClub || "",
+      mark: payload.mark,
+      wind: payload.wind ?? null,
+      athleteId: payload.athleteId,
+    }];
+    const sorted = withNew
+      .sort((a, b) => compareMarks(discipline, a.mark, b.mark))
+      .map((e, i) => ({ ...e, place: i + 1 }));
+    const newBlock = { disciplineId: payload.disciplineId, gender: payload.gender, round: payload.round, entries: sorted };
+    const newBlocks = idx === -1 ? [...currentBlocks, newBlock] : currentBlocks.map((b, i) => (i === idx ? newBlock : b));
+    await persistResults({ ...resultsStore, [compId]: newBlocks });
+    return compId;
   }
 
   const activeComp = competitions.find((c) => c.id === activeCompId) || null;
@@ -123,7 +166,7 @@ export default function App() {
         <p className="max-w-5xl mx-auto px-6 py-10 font-mono text-sm" style={{ color: "var(--steel)" }}>Chargement…</p>
       ) : topTab === "admin" ? (
         isAdmin ? (
-          <AdminPage competitions={competitions} resultsStore={resultsStore} athletes={athletes} />
+          <AdminPage competitions={competitions} resultsStore={resultsStore} athletes={athletes} onRestoreBackup={restoreBackup} />
         ) : (
           <p className="max-w-5xl mx-auto px-6 py-10 font-mono text-sm" style={{ color: "var(--steel)" }}>Accès réservé aux administrateurs.</p>
         )
@@ -188,6 +231,7 @@ export default function App() {
             setTopTab("calendrier");
             openCompetition(compId, "view", disciplineId2, gender2, round2);
           }}
+          onAddPerformance={addAthletePerformance}
         />
       )}
     </div>
