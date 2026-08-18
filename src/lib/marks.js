@@ -16,8 +16,11 @@ export function formatMark(discipline, value) {
 
 export function parseMarkToken(discipline, raw) {
   if (discipline.type === "time") return parseTimeToken(raw);
-  const token = String(raw || "").trim().split(/\s+/)[0].replace(",", ".").replace(/m$/i, "");
-  const v = parseFloat(token);
+  const token = String(raw || "").trim().split(/\s+/)[0];
+  // notation française : "6m98" = 6.98 (le 'm' sert de séparateur décimal,
+  // comme l'apostrophe pour les temps) — pas un simple suffixe d'unité.
+  const cleaned = token.replace(/m/i, ".").replace(",", ".");
+  const v = parseFloat(cleaned);
   if (isNaN(v)) return null;
   if (discipline.type === "points") return Math.round(v);
   return v;

@@ -135,19 +135,54 @@ function normalizeLabel(s) {
     .toLowerCase().trim();
 }
 
-function normalizeDate(raw) {
-  const parts = raw.split(/[/.-]/).map((p) => p.trim());
-  if (parts.length !== 3) return null;
-  let [d, m, y] = parts;
-  if (y.length === 2) y = (parseInt(y, 10) > 50 ? "19" : "20") + y;
-  d = d.padStart(2, "0");
-  m = m.padStart(2, "0");
-  if (!d || !m || !y) return null;
-  return `${y}-${m}-${d}`;
+/* nettoie un libellé de discipline avant recherche dans la table d'alias :
+   enlève les annotations entre parenthèses (hauteur de haies, poids de
+   l'engin...), les mentions "Piste Courte"/"Salle" (indoor, fusionné avec
+   l'épreuve plein air faute de distinction dans le modèle actuel), et les
+   espaces utilisés comme séparateur de milliers ("1 500m" -> "1500m"). */
+function normalizeDisciplineLabel(raw) {
+  let s = String(raw || "").trim();
+  s = s.replace(/\([^)]*\)/g, " ");
+  s = s.replace(/\bpiste courte\b/gi, " ").replace(/\bsalle\b/gi, " ").replace(/\bindoor\b/gi, " ");
+  s = s.replace(/(\d)\s+(\d)/g, "$1$2");
+  s = s.replace(/\s+/g, " ").trim();
+  return normalizeLabel(s);
 }
 
-export function parseAthleteHistoryText(text, disciplinesList, aliases) {
-  const dateRe = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/;
+const FR_MONTHS = {
+  janv: 1, jan: 1, fev: 2, mars: 3, avr: 4, mai: 5, juin: 6,
+  juil: 7, aout: 8, sept: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/* dates numériques (12/06/2026) ET format FFA "1 Août" / "28 Fév." (sans
+   année — on prend l'année en cours par défaut, à corriger si besoin dans
+   le tableau de vérification affiché avant enregistrement) */
+function parseFlexibleDate(raw, referenceYear) {
+  const token = raw.trim();
+  const numeric = token.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (numeric) {
+    let [, d, m, y] = numeric;
+    if (y.length === 2) y = (parseInt(y, 10) > 50 ? "19" : "20") + y;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const frMatch = token.match(/^(\d{1,2})\s+([a-zà-ÿ.]+)$/i);
+  if (frMatch) {
+    const day = frMatch[1].padStart(2, "0");
+    const key = normalizeLabel(frMatch[2]).replace(/\.$/, "").slice(0, 5);
+    const monthNum = FR_MONTHS[key] || FR_MONTHS[key.slice(0, 4)] || FR_MONTHS[key.slice(0, 3)];
+    if (monthNum) return `${referenceYear}-${String(monthNum).padStart(2, "0")}-${day}`;
+  }
+  return null;
+}
+
+const isDateLike = (s) => /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(s.trim()) || /^\d{1,2}\s+[a-zà-ÿ.]+\.?$/i.test(s.trim());
+const isRoundLike = (s) => /^(final|s[ée]rie|demi|qualif|h\.?\s*stade)/i.test(s.trim());
+const isLevelLike = (s) => /^(N\d|I[AB]|R\d|D\d|IR\d)$/i.test(s.trim());
+const isPlaceLike = (s) => /^\d{1,3}(\s*\([^)]*\))?$/.test(s.trim());
+const isPointsLike = (s) => /^\d{3,5}$/.test(s.trim());
+
+export function parseAthleteHistoryText(text, disciplinesList, aliases, referenceYear) {
+  const year = referenceYear || new Date().getFullYear();
   const rows = [];
   (text || "").split(/\r?\n+/).forEach((line) => {
     const cols = line.split(/\t+|\s{2,}/).map((c) => c.trim()).filter(Boolean);
@@ -156,7 +191,7 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases) {
     let disciplineId = null;
     let discIdx = -1;
     for (let i = 0; i < cols.length; i++) {
-      const norm = normalizeLabel(cols[i]);
+      const norm = normalizeDisciplineLabel(cols[i]);
       if (aliases[norm]) { disciplineId = aliases[norm]; discIdx = i; break; }
     }
     if (!disciplineId) return;
@@ -166,7 +201,7 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases) {
     let dateIdx = -1, date = null;
     for (let i = 0; i < cols.length; i++) {
       if (i === discIdx) continue;
-      if (dateRe.test(cols[i])) { dateIdx = i; date = normalizeDate(cols[i]); break; }
+      if (isDateLike(cols[i])) { const parsed = parseFlexibleDate(cols[i], year); if (parsed) { dateIdx = i; date = parsed; break; } }
     }
 
     let markIdx = -1, mark = null, wind = null;
@@ -178,7 +213,8 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases) {
     if (mark === null) return;
 
     const rest = cols.filter((_, i) => i !== discIdx && i !== dateIdx && i !== markIdx);
-    const competition = (rest.sort((a, b) => b.length - a.length)[0] || "Compétition (à préciser)").trim();
+    const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c));
+    const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").trim();
 
     rows.push({ disciplineId, date, mark, wind, competition });
   });
