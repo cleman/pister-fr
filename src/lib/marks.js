@@ -51,4 +51,20 @@ export function isLegalWind(wind) {
   return wind === null || wind === undefined || wind <= 2.0;
 }
 
+/* statuts sans marque numérique : non-partant, abandon, disqualifié.
+   Alias reconnus dans le texte collé (français + codes internationaux). */
+export const STATUS_ALIASES = {
+  np: "DNS", dns: "DNS", "non partant": "DNS", forfait: "DNS",
+  ab: "DNF", dnf: "DNF", abandon: "DNF",
+  dq: "DQ", dsq: "DQ", disqualifie: "DQ", disqualifié: "DQ",
+};
+
+export const STATUS_LABELS = { DNS: "DNS", DNF: "DNF", DQ: "DQ" };
+
+/* Affichage d'une entrée : le statut prime sur la marque quand présent. */
+export function markDisplay(discipline, entry) {
+  if (entry.status) return STATUS_LABELS[entry.status] || entry.status;
+  return formatMark(discipline, entry.mark);
+}
+
 export { CLOCK_IDS };

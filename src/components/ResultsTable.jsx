@@ -1,6 +1,6 @@
 import React from "react";
 import { DISCIPLINES } from "../data/disciplines";
-import { formatMark, isLegalWind } from "../lib/marks";
+import { markDisplay, isLegalWind } from "../lib/marks";
 import { Trash2 } from "lucide-react";
 
 export default function ResultsTable({ disciplineId, entries, onSelectAthlete, onDeleteEntry }) {
@@ -15,12 +15,12 @@ export default function ResultsTable({ disciplineId, entries, onSelectAthlete, o
               onClick={() => onSelectAthlete(r.athleteId)}
               className="focus-ring row-hover flex-1 min-w-0 text-left flex items-center gap-4 px-4 py-2.5"
             >
-              <div className="font-display font-bold text-xs w-7 h-7 rounded-sm flex items-center justify-center shrink-0" style={{ background: r.place === 1 ? "var(--lane-yellow)" : "var(--paper)", color: "var(--ink)", border: "2px solid var(--ink)" }}>{r.place}</div>
+              <div className="font-display font-bold text-xs w-7 h-7 rounded-sm flex items-center justify-center shrink-0" style={{ background: r.place === 1 ? "var(--lane-yellow)" : "var(--paper)", color: "var(--ink)", border: "2px solid var(--ink)" }}>{r.status ? "—" : r.place}</div>
               <span className="flex-1 font-display text-sm truncate" style={{ color: "var(--ink)" }}>{r.name}</span>
               <span className="text-xs hidden sm:block shrink-0" style={{ color: "var(--steel)" }}>{r.club}</span>
-              <span className="font-mono font-semibold shrink-0" style={{ color: "var(--ink)" }}>
-                {formatMark(discipline, r.mark)}
-                {discipline && discipline.hasWind && r.wind !== null && r.wind !== undefined && (
+              <span className="font-mono font-semibold shrink-0" style={{ color: r.status ? "var(--track)" : "var(--ink)" }}>
+                {markDisplay(discipline, r)}
+                {!r.status && discipline && discipline.hasWind && r.wind !== null && r.wind !== undefined && (
                   <span className="font-mono text-xs ml-1" style={{ color: legal ? "var(--steel)" : "var(--track)" }}>
                     ({r.wind > 0 ? "+" : ""}{r.wind.toFixed(1)}{!legal ? " NH" : ""})
                   </span>

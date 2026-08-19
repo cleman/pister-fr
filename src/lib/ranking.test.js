@@ -94,4 +94,17 @@ describe("getAthleteHistory / computeGlobalRanking / computeCompetitionOverview"
     // ici on vérifie juste que la fonction ne plante pas et respecte indoorEligible
     expect(Array.isArray(withIndoorArg)).toBe(true);
   });
+
+  it("computeGlobalRanking : ignore les entrées avec statut (DNS/DNF/DQ, pas de marque à comparer)", () => {
+    const withStatus = {
+      c3: [
+        { disciplineId: "100", gender: "H", environment: "outdoor", round: { type: "finale", heat: null },
+          entries: [
+            { place: null, name: "Isabelle Black", club: "Montpellier", mark: null, wind: null, status: "DNF", athleteId: "a3" },
+          ] },
+      ],
+    };
+    const ranking = computeGlobalRanking(time100, "H", "outdoor", withStatus, athletes, [{ id: "c3", name: "Meeting C", date: "2026-08-01" }]);
+    expect(ranking.some((r) => r.athleteId === "a3")).toBe(false);
+  });
 });

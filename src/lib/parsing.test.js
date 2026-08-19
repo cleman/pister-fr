@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTextTable, parseAthleteHistoryText, parseSingleDisciplineHistoryText, parseFlexibleDate, detectEnvironment, normalizeDisciplineLabel } from "./parsing";
+import { parseTextTable, parseAthleteHistoryText, parseSingleDisciplineHistoryText, parseDisciplineBilanText, parseFlexibleDate, detectEnvironment, normalizeDisciplineLabel } from "./parsing";
 import { DISCIPLINES, DISCIPLINE_ALIASES } from "../data/disciplines";
 
 const find = (id) => DISCIPLINES.find((d) => d.id === id);
@@ -69,15 +69,18 @@ describe("parseAthleteHistoryText — bilan de saison (sans année)", () => {
 30 Mai \t3000m Steeple (76) \tNP \t\tFinal 1 \t\t\t\tToulouse
 17 Mai \tPoids (4 kg) \t7m29 \t\tFinal 1 \t4 \tD2 \t419 \tChalon Sur Saone`;
 
-  it("reconnaît les lignes valides et ignore les non-partants", () => {
+  it("reconnaît les lignes valides et capture désormais le non-partant comme statut (plus ignoré)", () => {
     const rows = parseAthleteHistoryText(text, DISCIPLINES, DISCIPLINE_ALIASES, 2026);
-    expect(rows).toHaveLength(2); // la ligne "NP" est ignorée
+    expect(rows).toHaveLength(3); // 1500m, poids, + la ligne "NP" capturée en statut DNS
     const r1500 = rows.find((r) => r.disciplineId === "1500");
     expect(r1500.mark).toBeCloseTo(251.86, 2); // 4'11''86 = 4*60+11.86
     expect(r1500.date).toBe("2026-08-01");
     expect(r1500.competition).toBe("Oordegem");
     const poids = rows.find((r) => r.disciplineId === "poids");
     expect(poids.mark).toBeCloseTo(7.29, 2);
+    const dns = rows.find((r) => r.status === "DNS");
+    expect(dns).toBeDefined();
+    expect(dns.mark).toBeNull();
   });
 });
 
@@ -104,5 +107,42 @@ describe("parseSingleDisciplineHistoryText — bilan annuel d'une seule épreuve
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ mark: 65.96, club: "Lyon Athletisme", competition: "Ramona (USA)" });
     expect(rows[1].club).toBe("Cs Bourgoin-Jallieu");
+  });
+});
+
+describe("parseAthleteHistoryText — capture la vraie place et les statuts (DNS/DNF/DQ)", () => {
+  it("cas réel : 13e place en hauteur — ne doit pas être perdue", () => {
+    const text = `4 Mai\tHauteur\t1m20\t\tFinal 1\t13\tD5\t453\tMacon`;
+    const rows = parseAthleteHistoryText(text, DISCIPLINES, DISCIPLINE_ALIASES, 2026);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].place).toBe(13);
+  });
+
+  it("un statut NP devient DNS au lieu d'être ignoré", () => {
+    const text = `30 Mai \t3000m Steeple (76) \tNP \t\tFinal 1 \t\t\t\tToulouse`;
+    const rows = parseAthleteHistoryText(text, DISCIPLINES, DISCIPLINE_ALIASES, 2026);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("DNS");
+    expect(rows[0].mark).toBeNull();
+  });
+});
+
+describe("parseDisciplineBilanText — bilan hors compétition (un athlète et une compétition par ligne)", () => {
+  const longueur = find("longueur");
+  it("reconnaît place, nom, club, marque+vent, date, compétition", () => {
+    const text = `1\t6m98 (+0.9)\tKPATCHA Hilary\tNice Cote D'azur Athletisme *\t12/06/2026\tMeeting de Paris
+2\t6m86 (+1.6)\tDAVID Yanis Esmeralda\tCa Montreuil 93\t05/06/2026\tMeeting de Lyon`;
+    const rows = parseDisciplineBilanText(text, longueur);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ name: "KPATCHA Hilary", mark: 6.98, place: 1, competition: "Meeting de Paris" });
+    expect(rows[0].wind).toBeCloseTo(0.9, 1);
+  });
+
+  it("reconnaît un statut sans marque", () => {
+    const text = `3\tDNS\tAthlete Absent\tClub Test`;
+    const rows = parseDisciplineBilanText(text, longueur);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("DNS");
+    expect(rows[0].place).toBe(3);
   });
 });

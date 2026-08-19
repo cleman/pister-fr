@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { X, Calendar, Trash2, Filter, Maximize2, Minimize2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
-import { formatMark, isBetterMark, isLegalWind, compareMarks } from "../lib/marks";
+import { formatMark, isBetterMark, isLegalWind, compareMarks, markDisplay } from "../lib/marks";
+import { compareEntries } from "../lib/blocks";
 import { roundLabel, envLabel } from "../lib/rounds";
 import { getAthleteHistory } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
@@ -21,6 +22,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
       const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
       if (!disc) return;
       const key = `${h.disciplineId}-${h.gender}-${h.environment}`;
+      if (h.status) return; // DNS/DNF/DQ : pas de marque à comparer
       if (!map[key] || isBetterMark(disc, h.mark, map[key].mark)) map[key] = h;
     });
     return Object.values(map).sort((a, b) => a.disciplineId.localeCompare(b.disciplineId));
@@ -31,8 +33,8 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
     const arr = [...visibleHistoryRaw];
     if (sortMode === "date_asc") arr.sort((a, b) => new Date(a.date) - new Date(b.date));
     else if (sortMode === "date_desc") arr.sort((a, b) => new Date(b.date) - new Date(a.date));
-    else if (sortMode === "mark_best" && visibleDiscipline) arr.sort((a, b) => compareMarks(visibleDiscipline, a.mark, b.mark));
-    else if (sortMode === "mark_worst" && visibleDiscipline) arr.sort((a, b) => compareMarks(visibleDiscipline, b.mark, a.mark));
+    else if (sortMode === "mark_best" && visibleDiscipline) arr.sort((a, b) => compareEntries(visibleDiscipline, a, b));
+    else if (sortMode === "mark_worst" && visibleDiscipline) arr.sort((a, b) => compareEntries(visibleDiscipline, b, a));
     return arr;
   }, [visibleHistoryRaw, sortMode, visibleDiscipline]);
 
@@ -130,10 +132,10 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
             </div>
           </div>
           <div className="space-y-1">
-            {historyFilter && visibleHistory.length > 1 && (
+            {historyFilter && visibleHistory.filter((h) => !h.status).length > 1 && (
               <MarkScale
                 discipline={visibleDiscipline}
-                points={visibleHistory.map((h) => ({ mark: h.mark, info: new Date(h.date).toLocaleDateString("fr-FR") }))}
+                points={visibleHistory.filter((h) => !h.status).map((h) => ({ mark: h.mark, info: new Date(h.date).toLocaleDateString("fr-FR") }))}
               />
             )}
             {visibleHistory.map((h, i) => {
@@ -148,7 +150,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
                         <Calendar size={11} />{new Date(h.date).toLocaleDateString("fr-FR")} · {disc ? getLabel(disc, h.gender) : h.disciplineId}{disc && disc.indoorEligible ? ` · ${envLabel(h.environment)}` : ""} · {roundLabel(h.round)} · {h.place}e place
                       </p>
                     </div>
-                    <span className="font-mono font-semibold shrink-0 ml-2" style={{ color: "var(--ink)" }}>{formatMark(disc, h.mark)}</span>
+                    <span className="font-mono font-semibold shrink-0 ml-2" style={{ color: h.status ? "var(--track)" : "var(--ink)" }}>{markDisplay(disc, h)}</span>
                   </button>
                   {isAdmin && (
                     <button onClick={() => handleDelete(h)} aria-label="Supprimer cette performance" className="focus-ring p-1.5 rounded-sm shrink-0" style={{ color: "var(--steel)" }}>

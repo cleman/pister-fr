@@ -11,8 +11,9 @@ import AdminPage from "./components/AdminPage";
 import { storage } from "./lib/storage";
 import { useAuth } from "./lib/auth";
 import { uid } from "./lib/util";
-import { resolveBlockEntries } from "./lib/athletes";
+import { resolveBlockEntries, resolveAthlete } from "./lib/athletes";
 import { compareMarks } from "./lib/marks";
+import { upsertBlockEntry, removeBlockEntry } from "./lib/blocks";
 import { roundKey, roundLabel } from "./lib/rounds";
 import { DISCIPLINES, getLabel } from "./data/disciplines";
 import { DEFAULT_COMPETITIONS } from "./data/competitions";
@@ -225,18 +226,17 @@ export default function App() {
     const idx = currentBlocks.findIndex(
       (b) => b.disciplineId === payload.disciplineId && b.gender === payload.gender && (b.environment || "outdoor") === env && roundKey(b.round) === roundKey(payload.round)
     );
-    const others = idx === -1 ? [] : currentBlocks[idx].entries.filter((e) => e.athleteId !== payload.athleteId);
-    const withNew = [...others, {
+    const entry = {
       name: payload.athleteName,
       club: payload.athleteClub || "",
-      mark: payload.mark,
-      wind: payload.wind ?? null,
+      mark: payload.status ? null : payload.mark,
+      wind: payload.status ? null : (payload.wind ?? null),
+      status: payload.status || null,
       athleteId: payload.athleteId,
-    }];
-    const sorted = withNew
-      .sort((a, b) => compareMarks(discipline, a.mark, b.mark))
-      .map((e, i) => ({ ...e, place: i + 1 }));
-    const newBlock = { disciplineId: payload.disciplineId, gender: payload.gender, environment: env, round: payload.round, entries: sorted };
+      place: payload.place || null,
+    };
+    const newEntries = upsertBlockEntry(discipline, idx === -1 ? [] : currentBlocks[idx].entries, entry);
+    const newBlock = { disciplineId: payload.disciplineId, gender: payload.gender, environment: env, round: payload.round, entries: newEntries };
     const newBlocks = idx === -1 ? [...currentBlocks, newBlock] : currentBlocks.map((b, i) => (i === idx ? newBlock : b));
     await persistResults({ ...resultsStoreRef.current, [compId]: newBlocks });
     logAudit("Ajout performance", `${payload.athleteName} · ${discipline ? getLabel(discipline, payload.gender) : payload.disciplineId}`);
@@ -247,6 +247,17 @@ export default function App() {
       await persistAthletes(athletesRef.current.map((a) => (a.id === payload.athleteId ? { ...a, gender: payload.gender } : a)));
     }
     return compId;
+  }
+
+  /* Même chose que addAthletePerformance, mais à partir d'un simple nom
+     (import d'un bilan par discipline) : résout/crée l'athlète d'abord. */
+  async function addBilanRow(payload) {
+    const r = resolveAthlete(payload.athleteName, payload.athleteClub, athletesRef.current);
+    let registry = athletesRef.current;
+    if (r.isNew) registry = [...registry, { id: r.id, canonicalName: r.canonicalName, club: payload.athleteClub || "", gender: payload.gender || null }];
+    else registry = registry.map((a) => (a.id === r.id ? { ...a, club: payload.athleteClub || a.club, gender: a.gender || payload.gender || null } : a));
+    await persistAthletes(registry);
+    return addAthletePerformance({ ...payload, athleteId: r.id, athleteName: r.canonicalName });
   }
 
   async function setAthleteGender(athleteId, newGender) {
@@ -267,13 +278,12 @@ export default function App() {
     const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
     const entry = blocks[idx].entries.find((e) => e.athleteId === athleteId);
     if (!entry) return;
-    const remaining = blocks[idx].entries.filter((e) => e.athleteId !== athleteId);
+    const remaining = removeBlockEntry(blocks[idx].entries, athleteId);
     let newBlocks;
     if (remaining.length === 0) {
       newBlocks = blocks.filter((_, i) => i !== idx);
     } else {
-      const resorted = remaining.sort((a, b) => compareMarks(discipline, a.mark, b.mark)).map((e, i) => ({ ...e, place: i + 1 }));
-      newBlocks = blocks.map((b, i) => (i === idx ? { ...b, entries: resorted } : b));
+      newBlocks = blocks.map((b, i) => (i === idx ? { ...b, entries: remaining } : b));
     }
     await persistResults({ ...resultsStoreRef.current, [compId]: newBlocks });
 
@@ -407,6 +417,8 @@ export default function App() {
           competitions={competitions}
           onSelectAthlete={(athleteId) => setAthleteProfileId(athleteId)}
           onGoCalendar={() => setTopTab("calendrier")}
+          onOpenCompetition={(compId) => { setTopTab("calendrier"); openCompetition(compId, "view"); }}
+          onImportBilan={addBilanRow}
         />
       )}
 

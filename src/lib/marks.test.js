@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatMark, parseMarkToken, compareMarks, isBetterMark, isLegalWind } from "./marks";
+import { formatMark, parseMarkToken, compareMarks, isBetterMark, isLegalWind, markDisplay, STATUS_ALIASES } from "./marks";
 import { DISCIPLINES } from "../data/disciplines";
 
 const time100 = DISCIPLINES.find((d) => d.id === "100");
@@ -67,5 +67,24 @@ describe("isLegalWind", () => {
   });
   it("non homologable au-delà de +2.0", () => {
     expect(isLegalWind(2.1)).toBe(false);
+  });
+});
+
+describe("markDisplay", () => {
+  it("affiche le statut plutôt que la marque quand présent", () => {
+    expect(markDisplay(time100, { status: "DNF", mark: null })).toBe("DNF");
+    expect(markDisplay(time100, { status: "DQ" })).toBe("DQ");
+  });
+  it("affiche la marque normalement en l'absence de statut", () => {
+    expect(markDisplay(time100, { mark: 10.38 })).toBe("10.38");
+  });
+});
+
+describe("STATUS_ALIASES", () => {
+  it("reconnaît les codes français (NP, AB) et internationaux (DNS, DNF, DQ)", () => {
+    expect(STATUS_ALIASES["np"]).toBe("DNS");
+    expect(STATUS_ALIASES["ab"]).toBe("DNF");
+    expect(STATUS_ALIASES["dq"]).toBe("DQ");
+    expect(STATUS_ALIASES["dsq"]).toBe("DQ");
   });
 });

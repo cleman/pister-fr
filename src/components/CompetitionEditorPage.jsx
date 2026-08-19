@@ -169,7 +169,7 @@ export default function CompetitionEditorPage({
         <div>
           <p className="text-xs mb-3 flex items-center gap-2" style={{ color: "var(--steel)" }}><Info size={13} /> Calculée automatiquement : meilleure marque de chaque athlète, tous tours confondus. Rien à saisir ici — modifie les tours individuels ci-dessus.</p>
           {overviewEntries.length > 1 && (
-            <MarkScale discipline={filterDiscipline} points={overviewEntries.map((e) => ({ mark: e.mark, info: e.name }))} />
+            <MarkScale discipline={filterDiscipline} points={overviewEntries.filter((e) => !e.status).map((e) => ({ mark: e.mark, info: [{ text: e.name, onClick: () => onSelectAthlete(e.athleteId) }] }))} />
           )}
           <ResultsTable disciplineId={filterDisciplineId} entries={overviewEntries} onSelectAthlete={onSelectAthlete} />
         </div>
@@ -199,7 +199,7 @@ export default function CompetitionEditorPage({
                 </div>
               )}
               {activeBlock.entries.length > 1 && (
-                <MarkScale discipline={filterDiscipline} points={activeBlock.entries.map((e) => ({ mark: e.mark, info: e.name }))} />
+                <MarkScale discipline={filterDiscipline} points={activeBlock.entries.filter((e) => !e.status).map((e) => ({ mark: e.mark, info: [{ text: e.name, onClick: () => onSelectAthlete(e.athleteId) }] }))} />
               )}
               <ResultsTable
                 disciplineId={filterDisciplineId}
@@ -215,7 +215,7 @@ export default function CompetitionEditorPage({
       ) : activeBlock ? (
         <div>
           {activeBlock.entries.length > 1 && (
-            <MarkScale discipline={filterDiscipline} points={activeBlock.entries.map((e) => ({ mark: e.mark, info: e.name }))} />
+            <MarkScale discipline={filterDiscipline} points={activeBlock.entries.filter((e) => !e.status).map((e) => ({ mark: e.mark, info: [{ text: e.name, onClick: () => onSelectAthlete(e.athleteId) }] }))} />
           )}
           <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} />
         </div>

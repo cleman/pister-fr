@@ -4,9 +4,29 @@ import { formatMark } from "../lib/marks";
 
 const VERTICAL_IDS = ["hauteur", "perche"];
 
+function InfoLine({ info }) {
+  if (!info) return null;
+  if (typeof info === "string") return <p className="font-mono text-[10px] mt-0.5" style={{ color: "var(--track)" }}>{info}</p>;
+  return (
+    <p className="font-mono text-[10px] mt-0.5" style={{ color: "var(--track)" }}>
+      {info.filter((seg) => seg && seg.text).map((seg, i, arr) => (
+        <React.Fragment key={i}>
+          {i > 0 && " · "}
+          {seg.onClick ? (
+            <button onClick={(e) => { e.stopPropagation(); seg.onClick(); }} className="focus-ring underline">{seg.text}</button>
+          ) : (
+            <span>{seg.text}</span>
+          )}
+        </React.Fragment>
+      ))}
+    </p>
+  );
+}
+
 /**
- * points: [{ mark, info }] — `info` est le texte affiché au clic (date,
- * nom d'athlète, ou nom + date + lieu selon le contexte d'appel).
+ * points: [{ mark, info }] — `info` est soit une chaîne simple, soit un
+ * tableau de segments [{ text, onClick? }] pour un affichage avec des
+ * parties cliquables (nom d'athlète -> fiche, compétition -> page dédiée).
  */
 export default function MarkScale({ discipline, points, title }) {
   const [mode, setMode] = useState("dots"); // 'dots' | 'bars'
@@ -49,7 +69,7 @@ export default function MarkScale({ discipline, points, title }) {
                   </div>
                   <span className="font-mono text-[10px] w-14 text-right shrink-0" style={{ color: "var(--ink)" }}>{formatMark(discipline, p.mark)}</span>
                 </button>
-                {activeIdx === i && <p className="font-mono text-[10px] mt-0.5" style={{ color: "var(--track)" }}>{p.info}</p>}
+                {activeIdx === i && <InfoLine info={p.info} />}
               </div>
             );
           })}
@@ -66,7 +86,7 @@ export default function MarkScale({ discipline, points, title }) {
                 <button onClick={() => toggle(i)} className="focus-ring flex-1 flex items-center h-3">
                   <div className="rounded-full" style={{ width: "8px", height: "8px", background: isBest ? "var(--lane-yellow)" : "var(--track)", opacity: isBest ? 1 : 0.6 }} />
                 </button>
-                {activeIdx === i && <span className="font-mono text-[9px]" style={{ color: "var(--track)" }}>{p.info}</span>}
+                {activeIdx === i && <InfoLine info={p.info} />}
               </div>
             );
           })}
@@ -88,7 +108,7 @@ export default function MarkScale({ discipline, points, title }) {
               );
             })}
           </div>
-          {activeIdx !== null && <p className="font-mono text-[10px] mt-2 text-center" style={{ color: "var(--track)" }}>{points[activeIdx].info}</p>}
+          {activeIdx !== null && <div className="text-center"><InfoLine info={points[activeIdx].info} /></div>}
           <div className="flex justify-between mt-1">
             <span className="font-mono text-[9px]" style={{ color: "var(--steel)" }}>{formatMark(discipline, worse)}</span>
             <span className="font-mono text-[9px]" style={{ color: "var(--steel)" }}>{formatMark(discipline, better)}</span>

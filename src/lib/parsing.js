@@ -1,5 +1,5 @@
 import { parseTimeToken, extractWind } from "./time";
-import { parseMarkToken } from "./marks";
+import { parseMarkToken, STATUS_ALIASES } from "./marks";
 
 /* ------------------------------------------------------------------ */
 /* OCR (en pause) — conservé pour reprise ultérieure, non branché à l'UI */
@@ -239,20 +239,31 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
       if (isDateLike(cols[i])) { const parsed = parseFlexibleDate(cols[i], year); if (parsed) { dateIdx = i; date = parsed; break; } }
     }
 
-    let markIdx = -1, mark = null, wind = null;
+    let markIdx = -1, mark = null, wind = null, status = null;
     for (let i = 0; i < cols.length; i++) {
       if (i === discIdx || i === dateIdx) continue;
       const m = parseMarkToken(discipline, cols[i]);
       if (m !== null && m > 0) { markIdx = i; mark = m; wind = extractWind(cols[i]); break; }
     }
-    if (mark === null) return;
+    if (mark === null) {
+      // pas de marque : peut-être un statut (non-partant, abandon, disqualifié)
+      for (let i = 0; i < cols.length; i++) {
+        if (i === discIdx || i === dateIdx) continue;
+        const token = normalizeLabel(cols[i].trim());
+        if (STATUS_ALIASES[token]) { status = STATUS_ALIASES[token]; markIdx = i; break; }
+      }
+      if (!status) return; // ni marque ni statut reconnu -> ligne ignorée
+    }
 
     const rest = cols.filter((_, i) => i !== discIdx && i !== dateIdx && i !== markIdx);
+    let place = null;
+    const placeIdx = rest.findIndex((c) => isPlaceLike(c));
+    if (placeIdx !== -1) place = parseInt(rest[placeIdx], 10);
     const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c));
     const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*/g, "").trim();
     const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*/g, "").trim() : "";
 
-    rows.push({ disciplineId, date, mark, wind, competition, club, environment });
+    rows.push({ disciplineId, date, mark, wind, competition, club, environment, place, status });
   });
   return rows;
 }
@@ -274,20 +285,86 @@ export function parseSingleDisciplineHistoryText(text, discipline, referenceYear
       if (isDateLike(cols[i])) { const parsed = parseFlexibleDate(cols[i], year); if (parsed) { dateIdx = i; date = parsed; break; } }
     }
 
-    let markIdx = -1, mark = null, wind = null;
+    let markIdx = -1, mark = null, wind = null, status = null;
     for (let i = 0; i < cols.length; i++) {
       if (i === dateIdx) continue;
       const m = parseMarkToken(discipline, cols[i]);
       if (m !== null && m > 0) { markIdx = i; mark = m; wind = extractWind(cols[i]); break; }
     }
-    if (mark === null) return;
+    if (mark === null) {
+      for (let i = 0; i < cols.length; i++) {
+        if (i === dateIdx) continue;
+        const token = normalizeLabel(cols[i].trim());
+        if (STATUS_ALIASES[token]) { status = STATUS_ALIASES[token]; markIdx = i; break; }
+      }
+      if (!status) return;
+    }
 
     const rest = cols.filter((_, i) => i !== dateIdx && i !== markIdx);
+    let place = null;
+    const placeIdx = rest.findIndex((c) => isPlaceLike(c) && !/^\d{4}$/.test(c.trim()));
+    if (placeIdx !== -1) place = parseInt(rest[placeIdx], 10);
     const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c) && !/^\d{4}$/.test(c.trim()));
     const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*/g, "").trim();
     const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*/g, "").trim() : "";
 
-    rows.push({ disciplineId: discipline.id, date, mark, wind, competition, club, environment: environment || "outdoor" });
+    rows.push({ disciplineId: discipline.id, date, mark, wind, competition, club, environment: environment || "outdoor", place, status });
+  });
+  return rows;
+}
+
+/* Bilan par discipline (hors compétition) : une liste de résultats pour
+   UNE discipline fixée, où chaque ligne est potentiellement un athlète ET
+   une compétition différents (ex. classement/bilan annuel FFA). Reconnaît
+   place, nom (mixte ou tout en majuscules), club, marque ou statut, date,
+   compétition. Fonctionnalité récente, pas encore calibrée sur un vrai
+   exemple — à vérifier ligne par ligne avant enregistrement. */
+export function parseDisciplineBilanText(text, discipline) {
+  const rows = [];
+  (text || "").split(/\r?\n+/).forEach((line) => {
+    const cols = line.split(/\t+|\s{2,}/).map((c) => c.trim()).filter(Boolean);
+    if (cols.length < 2) return;
+
+    let placeIdx = -1, place = null;
+    if (isPlaceLike(cols[0])) { placeIdx = 0; place = parseInt(cols[0], 10); }
+
+    let dateIdx = -1, date = null;
+    for (let i = 0; i < cols.length; i++) {
+      if (i === placeIdx) continue;
+      if (isDateLike(cols[i])) { const parsed = parseFlexibleDate(cols[i], new Date().getFullYear()); if (parsed) { dateIdx = i; date = parsed; break; } }
+    }
+
+    let markIdx = -1, mark = null, wind = null, status = null;
+    for (let i = 0; i < cols.length; i++) {
+      if (i === placeIdx || i === dateIdx) continue;
+      const m = parseMarkToken(discipline, cols[i]);
+      if (m !== null && m > 0) { markIdx = i; mark = m; wind = extractWind(cols[i]); break; }
+    }
+    if (mark === null) {
+      for (let i = 0; i < cols.length; i++) {
+        if (i === placeIdx || i === dateIdx) continue;
+        const token = normalizeLabel(cols[i].trim());
+        if (STATUS_ALIASES[token]) { status = STATUS_ALIASES[token]; markIdx = i; break; }
+      }
+      if (!status) return;
+    }
+
+    const isCodeLike = (c) => /^[A-Z]{2,4}\/\d{0,2}$/.test(c.trim());
+    const isNameLike = (c) => /[a-zA-Z]/.test(c) && !isCodeLike(c) && !isRoundLike(c) && !isLevelLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c);
+
+    let name = "", nameIdx = -1;
+    for (let i = 0; i < cols.length; i++) {
+      if (i === placeIdx || i === dateIdx || i === markIdx) continue;
+      if (isNameLike(cols[i])) { name = cols[i].replace(/\*/g, "").trim(); nameIdx = i; break; }
+    }
+    if (!name) return;
+
+    const rest = cols.filter((_, i) => i !== placeIdx && i !== dateIdx && i !== markIdx && i !== nameIdx);
+    const candidates = rest.filter((c) => c && !isRoundLike(c) && !isLevelLike(c) && !isPlaceLike(c) && !isPointsLike(c) && !isCategoryLike(c) && !isRegionDeptLike(c));
+    const competition = (candidates[candidates.length - 1] || "").replace(/\*/g, "").trim();
+    const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*/g, "").trim() : "";
+
+    rows.push({ name, club, mark, wind, status, place, date, competition });
   });
   return rows;
 }

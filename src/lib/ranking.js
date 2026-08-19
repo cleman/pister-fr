@@ -22,7 +22,7 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
             compId, compName: comp.name, date: comp.date,
             disciplineId: block.disciplineId, gender: block.gender, round: block.round,
             environment: block.environment || "outdoor",
-            place: e.place, mark: e.mark, wind: e.wind, club: e.club,
+            place: e.place, mark: e.mark, wind: e.wind, club: e.club, status: e.status || null,
           });
         }
       });
@@ -40,6 +40,7 @@ export function computeCompetitionOverview(discipline, blocksForFilter) {
   const bestByAthlete = {};
   blocksForFilter.forEach((block) => {
     block.entries.forEach((e) => {
+      if (e.status) return; // DNS/DNF/DQ : pas de marque à comparer
       const cur = bestByAthlete[e.athleteId];
       if (!cur || isBetterMark(discipline, e.mark, cur.mark)) {
         bestByAthlete[e.athleteId] = { ...e };
@@ -66,6 +67,7 @@ export function computeGlobalRanking(discipline, gender, environment, resultsSto
       if (block.disciplineId !== discipline.id || block.gender !== gender) return;
       if ((block.environment || "outdoor") !== env) return;
       block.entries.forEach((e) => {
+        if (e.status) return; // DNS/DNF/DQ : pas de marque à comparer
         const cur = bestByAthlete[e.athleteId];
         if (!cur || isBetterMark(discipline, e.mark, cur.mark)) {
           const comp = competitions.find((c) => c.id === compId);

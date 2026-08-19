@@ -11,6 +11,13 @@ const ROUND_CHOICES = [
   { type: "serie", heat: 1, label: "Série" },
 ];
 
+const STATUS_CHOICES = [
+  { value: "", label: "Marque" },
+  { value: "DNS", label: "DNS (non-partant)" },
+  { value: "DNF", label: "DNF (abandon)" },
+  { value: "DQ", label: "DQ (disqualifié)" },
+];
+
 function DisciplineSelect({ gender, value, onChange }) {
   const groups = disciplinesByCategory(gender);
   return (
@@ -24,6 +31,14 @@ function DisciplineSelect({ gender, value, onChange }) {
   );
 }
 
+function StatusSelect({ value, onChange }) {
+  return (
+    <select className="field" style={{ width: "auto" }} value={value || ""} onChange={(e) => onChange(e.target.value || null)}>
+      {STATUS_CHOICES.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+    </select>
+  );
+}
+
 export default function AddPerformancePanel({ athlete, competitions, onAddPerformance }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("single"); // 'single' | 'bulk'
@@ -33,6 +48,8 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   const [round, setRound] = useState(ROUND_CHOICES[0]);
   const [mark, setMark] = useState(null);
   const [wind, setWind] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [place, setPlace] = useState("");
   const [club, setClub] = useState(athlete.club || "");
   const [compMode, setCompMode] = useState("existing"); // 'existing' | 'new'
   const [competitionId, setCompetitionId] = useState("");
@@ -52,7 +69,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   const bulkDiscipline = bulkDisciplineId ? DISCIPLINES.find((d) => d.id === bulkDisciplineId) : null;
 
   async function handleSingleSave() {
-    if (typeof mark !== "number" || isNaN(mark) || mark <= 0) { setMsg("Marque manquante ou invalide."); return; }
+    if (!status && (typeof mark !== "number" || isNaN(mark) || mark <= 0)) { setMsg("Marque manquante ou invalide (ou choisis un statut DNS/DNF/DQ)."); return; }
     if (compMode === "existing" && !competitionId) { setMsg("Choisis une compétition."); return; }
     if (compMode === "new" && (!newCompName.trim() || !newCompDate)) { setMsg("Nom et date de la compétition requis."); return; }
     setBusy(true);
@@ -63,12 +80,16 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       athleteClub: club || athlete.club || "",
       competitionId: compMode === "existing" ? competitionId : null,
       newCompetition: compMode === "new" ? { name: newCompName.trim(), date: newCompDate, tier: "circuit" } : null,
-      disciplineId, gender, environment: discipline.indoorEligible ? environment : "outdoor", round, mark, wind,
+      disciplineId, gender, environment: discipline.indoorEligible ? environment : "outdoor", round,
+      mark: status ? null : mark, wind: status ? null : wind, status,
+      place: place ? parseInt(place, 10) : null,
     });
     setBusy(false);
     setMsg("Performance ajoutée.");
     setMark(null);
     setWind(null);
+    setStatus(null);
+    setPlace("");
   }
 
   function analyzeBulk() {
@@ -80,13 +101,13 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
     setBulkInfo("");
     if (!rows.length) {
       setBulkError(bulkDisciplineId
-        ? "Aucune ligne reconnue. Vérifie qu'il y a bien une date et une marque sur chaque ligne."
+        ? "Aucune ligne reconnue. Vérifie qu'il y a bien une date et une marque (ou un statut DNS/DNF/DQ) sur chaque ligne."
         : "Aucune ligne reconnue. Assure-toi que chaque ligne contient un libellé de discipline reconnu (ex. \"100m\", \"Longueur\", \"Poids\"...) et une marque — ou choisis une discipline unique ci-dessus si le texte ne la mentionne pas.");
       setBulkRows(null);
       return;
     }
     if (rows.length < totalLines) {
-      setBulkInfo(`${rows.length} ligne(s) reconnue(s) sur ${totalLines} collée(s) — les autres sont ignorées (non-partant/abandon, ou discipline non gérée).`);
+      setBulkInfo(`${rows.length} ligne(s) reconnue(s) sur ${totalLines} collée(s) — les autres sont ignorées (discipline non gérée).`);
     }
     // pré-remplit le club avec celui lu dans le texte (fiche de records),
     // ou à défaut le club actuel de l'athlète — modifiable ligne par ligne
@@ -121,7 +142,9 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
         athleteClub: row.club || "",
         competitionId: compId || null,
         newCompetition: compId ? null : { name: row.competition || "Compétition (à préciser)", date: row.date || new Date().toISOString().slice(0, 10), tier: "circuit" },
-        disciplineId: row.disciplineId, gender, environment: disc.indoorEligible ? (row.environment || "outdoor") : "outdoor", round: ROUND_CHOICES[0], mark: row.mark, wind: row.wind,
+        disciplineId: row.disciplineId, gender, environment: disc.indoorEligible ? (row.environment || "outdoor") : "outdoor", round: ROUND_CHOICES[0],
+        mark: row.status ? null : row.mark, wind: row.status ? null : row.wind, status: row.status || null,
+        place: row.place || null,
       });
       nameToId[key] = usedId;
     }
@@ -169,12 +192,21 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
 
           {discipline.indoorEligible && <EnvironmentToggle environment={environment} onChange={setEnvironment} />}
 
-          <div className="flex items-center gap-3">
-            <MeasurementField discipline={discipline} value={mark} onChange={setMark} />
-            {discipline.hasWind && (
-              <input type="number" step="0.1" className="field text-center" style={{ width: "4rem" }} placeholder="vent" value={wind === null ? "" : wind} onChange={(e) => setWind(e.target.value === "" ? null : parseFloat(e.target.value))} />
+          <div className="flex items-center gap-3 flex-wrap">
+            <StatusSelect value={status} onChange={setStatus} />
+            {!status && (
+              <>
+                <MeasurementField discipline={discipline} value={mark} onChange={setMark} />
+                {discipline.hasWind && (
+                  <input type="number" step="0.1" className="field text-center" style={{ width: "4rem" }} placeholder="vent" value={wind === null ? "" : wind} onChange={(e) => setWind(e.target.value === "" ? null : parseFloat(e.target.value))} />
+                )}
+              </>
             )}
+            <input type="number" min="1" className="field text-center" style={{ width: "6rem" }} placeholder="Place (si connue)" value={place} onChange={(e) => setPlace(e.target.value)} />
           </div>
+          <p className="text-xs" style={{ color: "var(--steel)" }}>
+            Si tu connais la vraie place de cette performance (ex. "13e"), renseigne-la — sinon la place est déduite automatiquement (1ère si c'est la seule performance saisie pour ce tour, ce qui peut être trompeur).
+          </p>
 
           <input className="field" placeholder="Club (à l'époque de cette performance)" value={club} onChange={(e) => setClub(e.target.value)} />
 
@@ -203,7 +235,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       ) : (
         <div className="space-y-3">
           <p className="text-xs" style={{ color: "var(--steel)" }}>
-            Colle l'historique de performances (ex. copié depuis la fiche athlète du site de la FFA). Chaque ligne doit contenir une discipline reconnue, une marque, et idéalement une date et le nom de la compétition. Le club est lu automatiquement quand la fiche source en contient un (ex. fiche de records), sinon le club actuel est proposé par défaut — modifiable ligne par ligne.
+            Colle l'historique de performances (ex. copié depuis la fiche athlète du site de la FFA). Chaque ligne doit contenir une discipline reconnue, et une marque (ou un statut DNS/DNF/DQ) — la place réelle (ex. "13e") est récupérée automatiquement quand le texte la contient. Le club est lu automatiquement quand la fiche source en contient un, sinon le club actuel est proposé par défaut.
           </p>
           <div>
             <label className="font-mono text-[10px] uppercase tracking-wide block mb-1" style={{ color: "var(--steel)" }}>
@@ -243,7 +275,9 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
                     {disc && disc.indoorEligible && (
                       <EnvironmentToggle environment={row.environment || "outdoor"} onChange={(env) => updateBulkRow(i, { environment: env })} />
                     )}
-                    <MeasurementField discipline={disc} value={row.mark} onChange={(v) => updateBulkRow(i, { mark: v })} />
+                    <StatusSelect value={row.status} onChange={(v) => updateBulkRow(i, { status: v })} />
+                    {!row.status && <MeasurementField discipline={disc} value={row.mark} onChange={(v) => updateBulkRow(i, { mark: v })} />}
+                    <input type="number" min="1" className="field text-center" style={{ width: "5rem" }} placeholder="Place" value={row.place || ""} onChange={(e) => updateBulkRow(i, { place: e.target.value ? parseInt(e.target.value, 10) : null })} />
                     <input className="field flex-1 min-w-[8rem]" placeholder="Compétition" value={row.competition} onChange={(e) => updateBulkRow(i, { competition: e.target.value })} />
                     <input className="field" type="date" style={{ width: "9rem" }} value={row.date || ""} onChange={(e) => updateBulkRow(i, { date: e.target.value })} />
                     <input className="field flex-1 min-w-[8rem]" placeholder="Club" value={row.club || ""} onChange={(e) => updateBulkRow(i, { club: e.target.value })} />

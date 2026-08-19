@@ -7,6 +7,8 @@ import DisciplineChips from "./DisciplineChips";
 import EnvironmentToggle from "./EnvironmentToggle";
 import Podium from "./Podium";
 import MarkScale from "./MarkScale";
+import ImportBilanPanel from "./ImportBilanPanel";
+import { useAuth } from "../lib/auth";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -23,8 +25,9 @@ function markWord(discipline) {
 
 export default function ClassementPage({
   gender, disciplineId, environment, onSetGender, onSetDiscipline, onSetEnvironment,
-  resultsStore, athletes, competitions, onSelectAthlete, onGoCalendar,
+  resultsStore, athletes, competitions, onSelectAthlete, onGoCalendar, onOpenCompetition, onImportBilan,
 }) {
+  const { canEdit } = useAuth();
   const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
   const effectiveEnv = discipline.indoorEligible ? environment : "outdoor";
 
@@ -86,6 +89,9 @@ export default function ClassementPage({
           {discipline.indoorEligible && <EnvironmentToggle environment={effectiveEnv} onChange={onSetEnvironment} />}
         </div>
         <DisciplineChips gender={gender} activeId={disciplineId} onSelect={onSetDiscipline} hasDataFor={hasDataFor} />
+        {canEdit && (
+          <ImportBilanPanel discipline={discipline} gender={gender} environment={effectiveEnv} onImportBilan={onImportBilan} />
+        )}
       </section>
 
       {/* RANKING BOARD */}
@@ -107,7 +113,12 @@ export default function ClassementPage({
                 title="Écarts entre athlètes"
                 points={ranking.map((r) => ({
                   mark: r.mark,
-                  info: `${r.name}${r.date ? " · " + new Date(r.date).toLocaleDateString("fr-FR") : ""}${r.location ? " · " + r.location : ""}`,
+                  info: [
+                    { text: r.name, onClick: () => onSelectAthlete(r.athleteId) },
+                    r.date ? { text: new Date(r.date).toLocaleDateString("fr-FR") } : null,
+                    r.compName ? { text: r.compName, onClick: r.compId ? () => onOpenCompetition(r.compId) : undefined } : null,
+                    r.location ? { text: r.location } : null,
+                  ],
                 }))}
               />
             )}
