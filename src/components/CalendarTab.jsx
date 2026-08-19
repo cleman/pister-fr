@@ -78,9 +78,15 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <div className="flex flex-wrap gap-1.5">
               <button onClick={() => setTierFilter("all")} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ background: tierFilter === "all" ? "var(--ink)" : "var(--card)", color: tierFilter === "all" ? "#fff" : "var(--steel)", border: "1px solid var(--line)" }}>Tous types</button>
-              {Object.entries(TIERS).map(([key, t]) => (
-                <button key={key} onClick={() => setTierFilter(key)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={tierFilter === key ? t.style : { color: "var(--steel)", border: "1px solid var(--line)" }}>{t.label}</button>
-              ))}
+              {Object.entries(TIERS).map(([key, t]) => {
+                const selected = tierFilter === key;
+                const style = selected
+                  ? (key === "regionale" ? { background: "var(--paper)", color: "var(--ink)", border: "2px solid var(--ink)" } : t.style)
+                  : { color: "var(--steel)", border: "1px solid var(--line)" };
+                return (
+                  <button key={key} onClick={() => setTierFilter(key)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={style}>{t.label}</button>
+                );
+              })}
             </div>
             {locations.length > 0 && (
               <select className="field" style={{ width: "auto" }} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>

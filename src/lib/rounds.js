@@ -5,10 +5,13 @@ export function roundKey(round) {
   return `${round.type}-${round.heat || 0}`;
 }
 
-export function roundLabel(round) {
+export function roundLabel(round, forceNumber) {
   if (!round) return "";
   if (round.type === "overview") return "Vue d'ensemble";
-  if (round.type === "finale") return !round.heat || round.heat === 1 ? "Finale" : `Finale ${round.heat}`;
+  if (round.type === "finale") {
+    if (forceNumber || (round.heat && round.heat > 1)) return `Finale ${round.heat || 1}`;
+    return "Finale";
+  }
   if (round.type === "demi") return `Demi-finale ${round.heat}`;
   return `Série ${round.heat}`;
 }

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Info, Trophy, Wind } from "lucide-react";
+import { BarChart2, Calendar, ChevronLeft, ChevronRight, Info, Trophy, Wind } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { computeGlobalRanking } from "../lib/ranking";
 import { isLegalWind } from "../lib/marks";
 import DisciplineChips from "./DisciplineChips";
 import EnvironmentToggle from "./EnvironmentToggle";
 import Podium from "./Podium";
+import RankingScale from "./RankingScale";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -35,6 +36,7 @@ export default function ClassementPage({
 
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [showScale, setShowScale] = useState(false);
   useEffect(() => { setPage(1); }, [disciplineId, gender, effectiveEnv, pageSize]);
 
   const effectivePageSize = pageSize === "all" ? Math.max(fullRanking.length, 1) : pageSize;
@@ -96,6 +98,10 @@ export default function ClassementPage({
         ) : (
           <>
             {page === 1 && <Podium top3={ranking.slice(0, 3)} onSelectAthlete={onSelectAthlete} />}
+            <button onClick={() => setShowScale((v) => !v)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm mb-3" style={{ border: "1px solid var(--line)", color: "var(--steel)" }}>
+              <BarChart2 size={11} /> {showScale ? "Masquer" : "Afficher"} les écarts visuels
+            </button>
+            {showScale && <RankingScale discipline={discipline} ranking={ranking} />}
             {(page === 1 ? ranking.slice(3) : ranking).length > 0 && (
             <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--line)", background: "var(--card)" }}>
               {(page === 1 ? ranking.slice(3) : ranking).map((a, idx, arr) => {

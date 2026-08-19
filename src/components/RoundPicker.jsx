@@ -26,7 +26,7 @@ export default function RoundPicker({ blocksForFilter, activeRound, onSelect, sh
                 <button key={roundKey(r)} onClick={() => onSelect(r)}
                   className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-1.5 rounded-sm"
                   style={{ background: isActive(r) ? "var(--ink)" : "var(--card)", color: isActive(r) ? "#fff" : "var(--ink)", border: "1px solid var(--line)" }}>
-                  {roundLabel(r)}
+                  {roundLabel(r, g.type === "finale" && roundsForGroup.length > 1)}
                 </button>
               ))}
             </div>
