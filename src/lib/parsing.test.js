@@ -1,8 +1,43 @@
 import { describe, it, expect } from "vitest";
-import { parseTextTable, parseAthleteHistoryText, parseSingleDisciplineHistoryText } from "./parsing";
+import { parseTextTable, parseAthleteHistoryText, parseSingleDisciplineHistoryText, parseFlexibleDate, detectEnvironment, normalizeDisciplineLabel } from "./parsing";
 import { DISCIPLINES, DISCIPLINE_ALIASES } from "../data/disciplines";
 
 const find = (id) => DISCIPLINES.find((d) => d.id === id);
+
+describe("parseFlexibleDate", () => {
+  it("format numérique jj/mm/aaaa", () => {
+    expect(parseFlexibleDate("12/06/2026", 2026)).toBe("2026-06-12");
+  });
+  it("format numérique avec année sur 2 chiffres", () => {
+    expect(parseFlexibleDate("12/06/26", 2026)).toBe("2026-06-12");
+  });
+  it("format français jour + mois, sans année (bilan de saison)", () => {
+    expect(parseFlexibleDate("1 Août", 2026)).toBe("2026-08-01");
+  });
+  it("format français avec mois abrégé et point", () => {
+    expect(parseFlexibleDate("28 Fév.", 2026)).toBe("2026-02-28");
+  });
+  it("format français avec année explicite (fiche de records)", () => {
+    expect(parseFlexibleDate("2 Mars 2008", 2026)).toBe("2008-03-02");
+  });
+  it("renvoie null pour un texte qui n'est pas une date", () => {
+    expect(parseFlexibleDate("Final 1", 2026)).toBeNull();
+  });
+});
+
+describe("detectEnvironment / normalizeDisciplineLabel", () => {
+  it("détecte la mention indoor (Piste Courte / Salle)", () => {
+    expect(detectEnvironment("1500m Piste Courte")).toBe("indoor");
+    expect(detectEnvironment("Longueur - Salle")).toBe("indoor");
+    expect(detectEnvironment("1500m")).toBe("outdoor");
+  });
+  it("normalise l'espace comme séparateur de milliers dans le libellé", () => {
+    expect(normalizeDisciplineLabel("1 500m")).toBe("1500m");
+  });
+  it("retire les annotations entre parenthèses avant comparaison", () => {
+    expect(normalizeDisciplineLabel("3000m Steeple (76)")).toBe("3000m steeple");
+  });
+});
 
 describe("parseTextTable — résultats de compétition (discipline connue)", () => {
   it("lit la longueur avec vent, notation française 6m98", () => {

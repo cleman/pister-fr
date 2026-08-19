@@ -141,7 +141,7 @@ function normalizeLabel(s) {
    l'engin...), les mentions "Piste Courte"/"Salle" (indoor, fusionné avec
    l'épreuve plein air faute de distinction dans le modèle actuel), et les
    espaces utilisés comme séparateur de milliers ("1 500m" -> "1500m"). */
-function normalizeDisciplineLabel(raw) {
+export function normalizeDisciplineLabel(raw) {
   let s = String(raw || "").trim();
   s = s.replace(/\([^)]*\)/g, " ");
   s = s.replace(/\bpiste courte\b/gi, " ").replace(/\bsalle\b/gi, " ").replace(/\bindoor\b/gi, " ");
@@ -153,7 +153,7 @@ function normalizeDisciplineLabel(raw) {
 /* détecte la mention indoor AVANT qu'elle ne soit effacée par la
    normalisation ci-dessus (utilisée pour classer une ligne en salle ou
    plein air lors du collage d'un historique) */
-function detectEnvironment(raw) {
+export function detectEnvironment(raw) {
   return /\b(piste courte|salle|indoor)\b/i.test(String(raw || "")) ? "indoor" : "outdoor";
 }
 
@@ -165,7 +165,7 @@ const FR_MONTHS = {
 /* dates numériques (12/06/2026) ET format FFA "1 Août" / "28 Fév." (sans
    année — on prend l'année en cours par défaut, à corriger si besoin dans
    le tableau de vérification affiché avant enregistrement) */
-function parseFlexibleDate(raw, referenceYear) {
+export function parseFlexibleDate(raw, referenceYear) {
   const token = raw.trim();
   const numeric = token.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
   if (numeric) {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { derivePermissions } from "./permissions";
 
 const AuthContext = createContext(null);
 
@@ -55,8 +56,7 @@ export function AuthProvider({ children }) {
     user,
     role,
     loading,
-    canEdit: role === "editor" || role === "admin",
-    isAdmin: role === "admin",
+    ...derivePermissions(role),
     signIn,
     signUp,
     signOut,
