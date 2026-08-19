@@ -76,6 +76,7 @@ export function computeGlobalRanking(discipline, gender, environment, resultsSto
             club: e.club,
             compId,
             compName: comp ? comp.name : "",
+            location: comp ? comp.location : "",
             date: comp ? comp.date : null,
             round: block.round,
           };

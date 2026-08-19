@@ -10,6 +10,7 @@ import EnvironmentToggle from "./EnvironmentToggle";
 import RoundPicker from "./RoundPicker";
 import ResultBlockForm from "./ResultBlockForm";
 import ResultsTable from "./ResultsTable";
+import MarkScale from "./MarkScale";
 
 function ChangeRoundForm({ current, existingRounds, onApply, onCancel }) {
   const [type, setType] = useState(current.type === "overview" ? "finale" : current.type);
@@ -167,6 +168,9 @@ export default function CompetitionEditorPage({
       {isOverview ? (
         <div>
           <p className="text-xs mb-3 flex items-center gap-2" style={{ color: "var(--steel)" }}><Info size={13} /> Calculée automatiquement : meilleure marque de chaque athlète, tous tours confondus. Rien à saisir ici — modifie les tours individuels ci-dessus.</p>
+          {overviewEntries.length > 1 && (
+            <MarkScale discipline={filterDiscipline} points={overviewEntries.map((e) => ({ mark: e.mark, info: e.name }))} />
+          )}
           <ResultsTable disciplineId={filterDisciplineId} entries={overviewEntries} onSelectAthlete={onSelectAthlete} />
         </div>
       ) : effectiveMode === "edit" ? (
@@ -194,6 +198,9 @@ export default function CompetitionEditorPage({
                   <button onClick={() => { onDeleteBlock(activeBlockIndex); setActiveRound(defaultRound(blocksForFilter.filter((b) => b !== activeBlock))); }} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: "1px solid var(--line)", color: "var(--track)" }}><Trash2 size={11} /> Supprimer</button>
                 </div>
               )}
+              {activeBlock.entries.length > 1 && (
+                <MarkScale discipline={filterDiscipline} points={activeBlock.entries.map((e) => ({ mark: e.mark, info: e.name }))} />
+              )}
               <ResultsTable
                 disciplineId={filterDisciplineId}
                 entries={activeBlock.entries}
@@ -206,7 +213,12 @@ export default function CompetitionEditorPage({
           <p className="text-sm" style={{ color: "var(--steel)" }}>Choisis un tour ci-dessus (bouton "Tour") pour commencer la saisie de {getLabel(filterDiscipline, filterGender)}.</p>
         )
       ) : activeBlock ? (
-        <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} />
+        <div>
+          {activeBlock.entries.length > 1 && (
+            <MarkScale discipline={filterDiscipline} points={activeBlock.entries.map((e) => ({ mark: e.mark, info: e.name }))} />
+          )}
+          <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} />
+        </div>
       ) : (
         <div className="rounded-md p-6 text-center" style={{ border: "1px dashed var(--line)", background: "var(--card)" }}>
           <p className="text-sm mb-3" style={{ color: "var(--steel)" }}>Aucun résultat saisi pour {getLabel(filterDiscipline, filterGender)} · {filterGender === "H" ? "Hommes" : "Femmes"}.</p>

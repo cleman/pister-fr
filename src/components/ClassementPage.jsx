@@ -6,7 +6,7 @@ import { isLegalWind } from "../lib/marks";
 import DisciplineChips from "./DisciplineChips";
 import EnvironmentToggle from "./EnvironmentToggle";
 import Podium from "./Podium";
-import RankingScale from "./RankingScale";
+import MarkScale from "./MarkScale";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -101,7 +101,16 @@ export default function ClassementPage({
             <button onClick={() => setShowScale((v) => !v)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm mb-3" style={{ border: "1px solid var(--line)", color: "var(--steel)" }}>
               <BarChart2 size={11} /> {showScale ? "Masquer" : "Afficher"} les écarts visuels
             </button>
-            {showScale && <RankingScale discipline={discipline} ranking={ranking} />}
+            {showScale && (
+              <MarkScale
+                discipline={discipline}
+                title="Écarts entre athlètes"
+                points={ranking.map((r) => ({
+                  mark: r.mark,
+                  info: `${r.name}${r.date ? " · " + new Date(r.date).toLocaleDateString("fr-FR") : ""}${r.location ? " · " + r.location : ""}`,
+                }))}
+              />
+            )}
             {(page === 1 ? ranking.slice(3) : ranking).length > 0 && (
             <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--line)", background: "var(--card)" }}>
               {(page === 1 ? ranking.slice(3) : ranking).map((a, idx, arr) => {

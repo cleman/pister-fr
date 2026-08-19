@@ -1,18 +1,19 @@
 import React, { useMemo, useState } from "react";
 import { X, Calendar, Trash2, Filter, Maximize2, Minimize2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
-import { formatMark, isBetterMark, isLegalWind } from "../lib/marks";
+import { formatMark, isBetterMark, isLegalWind, compareMarks } from "../lib/marks";
 import { roundLabel, envLabel } from "../lib/rounds";
 import { getAthleteHistory } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import AddPerformancePanel from "./AddPerformancePanel";
-import ProgressionScale from "./ProgressionScale";
+import MarkScale from "./MarkScale";
 
 export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance, onSetGender, onDeletePerformance }) {
   const { canEdit, isAdmin } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const athlete = athletes.find((a) => a.id === athleteId);
   const [historyFilter, setHistoryFilter] = useState(null); // `${disciplineId}-${gender}-${environment}` ou null
+  const [sortMode, setSortMode] = useState("date_desc");
   const history = useMemo(() => getAthleteHistory(athleteId, resultsStore, competitions), [athleteId, resultsStore, competitions]);
   const bests = useMemo(() => {
     const map = {};
@@ -24,7 +25,16 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
     });
     return Object.values(map).sort((a, b) => a.disciplineId.localeCompare(b.disciplineId));
   }, [history]);
-  const visibleHistory = historyFilter ? history.filter((h) => `${h.disciplineId}-${h.gender}-${h.environment}` === historyFilter) : history;
+  const visibleHistoryRaw = historyFilter ? history.filter((h) => `${h.disciplineId}-${h.gender}-${h.environment}` === historyFilter) : history;
+  const visibleDiscipline = visibleHistoryRaw[0] ? DISCIPLINES.find((d) => d.id === visibleHistoryRaw[0].disciplineId) : null;
+  const visibleHistory = useMemo(() => {
+    const arr = [...visibleHistoryRaw];
+    if (sortMode === "date_asc") arr.sort((a, b) => new Date(a.date) - new Date(b.date));
+    else if (sortMode === "date_desc") arr.sort((a, b) => new Date(b.date) - new Date(a.date));
+    else if (sortMode === "mark_best" && visibleDiscipline) arr.sort((a, b) => compareMarks(visibleDiscipline, a.mark, b.mark));
+    else if (sortMode === "mark_worst" && visibleDiscipline) arr.sort((a, b) => compareMarks(visibleDiscipline, b.mark, a.mark));
+    return arr;
+  }, [visibleHistoryRaw, sortMode, visibleDiscipline]);
 
   if (!athlete) return null;
 
@@ -103,17 +113,28 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
         </div>
 
         <div className={"px-5 pb-8" + (expanded ? " max-w-2xl mx-auto" : "")}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <p className="font-mono text-xs uppercase tracking-wider" style={{ color: "var(--steel)" }}>Historique des résultats</p>
-            {historyFilter && (
-              <button onClick={() => setHistoryFilter(null)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>
-                <Filter size={10} /> Filtré <X size={10} />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <select className="field" style={{ width: "auto" }} value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
+                <option value="date_desc">Plus récent d'abord</option>
+                <option value="date_asc">Plus ancien d'abord</option>
+                {visibleDiscipline && <option value="mark_best">Meilleure marque d'abord</option>}
+                {visibleDiscipline && <option value="mark_worst">Moins bonne marque d'abord</option>}
+              </select>
+              {historyFilter && (
+                <button onClick={() => setHistoryFilter(null)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>
+                  <Filter size={10} /> Filtré <X size={10} />
+                </button>
+              )}
+            </div>
           </div>
           <div className="space-y-1">
-            {historyFilter && visibleHistory.length > 0 && (
-              <ProgressionScale discipline={DISCIPLINES.find((d) => d.id === visibleHistory[0].disciplineId)} history={visibleHistory} />
+            {historyFilter && visibleHistory.length > 1 && (
+              <MarkScale
+                discipline={visibleDiscipline}
+                points={visibleHistory.map((h) => ({ mark: h.mark, info: new Date(h.date).toLocaleDateString("fr-FR") }))}
+              />
             )}
             {visibleHistory.map((h, i) => {
               const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
