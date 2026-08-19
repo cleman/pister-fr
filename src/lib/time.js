@@ -1,8 +1,17 @@
-export const CLOCK_IDS = ["800", "1500", "3000", "3000sc", "5000", "10000"];
+export const CLOCK_IDS = [
+  "800", "1500", "3000", "3000sc", "5000", "10000",
+  "5km-route", "10km-route", "semi-marathon", "marathon", "4x400",
+];
 
 export function formatTime(disciplineId, totalSeconds) {
   if (typeof totalSeconds !== "number" || isNaN(totalSeconds)) return "—";
   if (CLOCK_IDS.includes(disciplineId)) {
+    if (totalSeconds >= 3600) {
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = (totalSeconds % 60).toFixed(2).padStart(5, "0");
+      return `${h}:${String(m).padStart(2, "0")}:${s}`;
+    }
     const m = Math.floor(totalSeconds / 60);
     const s = (totalSeconds % 60).toFixed(2).padStart(5, "0");
     return `${m}:${s}`;

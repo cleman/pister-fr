@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { X, Calendar, Trash2, Filter } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
-import { formatMark, isBetterMark } from "../lib/marks";
-import { roundLabel } from "../lib/rounds";
+import { formatMark, isBetterMark, isLegalWind } from "../lib/marks";
+import { roundLabel, envLabel } from "../lib/rounds";
 import { getAthleteHistory } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import AddPerformancePanel from "./AddPerformancePanel";
@@ -10,25 +10,25 @@ import AddPerformancePanel from "./AddPerformancePanel";
 export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance, onSetGender, onDeletePerformance }) {
   const { canEdit, isAdmin } = useAuth();
   const athlete = athletes.find((a) => a.id === athleteId);
-  const [historyFilter, setHistoryFilter] = useState(null); // `${disciplineId}-${gender}` ou null
+  const [historyFilter, setHistoryFilter] = useState(null); // `${disciplineId}-${gender}-${environment}` ou null
   const history = useMemo(() => getAthleteHistory(athleteId, resultsStore, competitions), [athleteId, resultsStore, competitions]);
   const bests = useMemo(() => {
     const map = {};
     history.forEach((h) => {
       const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
       if (!disc) return;
-      const key = `${h.disciplineId}-${h.gender}`;
+      const key = `${h.disciplineId}-${h.gender}-${h.environment}`;
       if (!map[key] || isBetterMark(disc, h.mark, map[key].mark)) map[key] = h;
     });
     return Object.values(map).sort((a, b) => a.disciplineId.localeCompare(b.disciplineId));
   }, [history]);
-  const visibleHistory = historyFilter ? history.filter((h) => `${h.disciplineId}-${h.gender}` === historyFilter) : history;
+  const visibleHistory = historyFilter ? history.filter((h) => `${h.disciplineId}-${h.gender}-${h.environment}` === historyFilter) : history;
 
   if (!athlete) return null;
 
   function handleDelete(h) {
-    if (!window.confirm(`Supprimer cette performance (${h.compName}) ? Cette action est irréversible.`)) return;
-    onDeletePerformance(h.compId, h.disciplineId, h.gender, h.round);
+    if (!window.confirm(`Supprimer cette performance (${h.compName}) ? Cette action est irréversible (mais restaurable par un admin depuis la corbeille).`)) return;
+    onDeletePerformance(h.compId, h.disciplineId, h.gender, h.environment, h.round);
   }
 
   return (
@@ -64,8 +64,9 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
             <div className="space-y-1 mb-4">
               {bests.map((b) => {
                 const disc = DISCIPLINES.find((d) => d.id === b.disciplineId);
-                const key = `${b.disciplineId}-${b.gender}`;
+                const key = `${b.disciplineId}-${b.gender}-${b.environment}`;
                 const active = historyFilter === key;
+                const legal = isLegalWind(b.wind);
                 return (
                   <button
                     key={key}
@@ -74,8 +75,15 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
                     style={{ background: active ? "var(--paper)" : "transparent" }}
                   >
                     <div className="flex items-center justify-between text-sm">
-                      <span style={{ color: active ? "var(--track)" : "var(--ink)" }}>{disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}</span></span>
-                      <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>{formatMark(disc, b.mark)}</span>
+                      <span style={{ color: active ? "var(--track)" : "var(--ink)" }}>
+                        {disc ? getLabel(disc, b.gender) : b.disciplineId} <span style={{ color: "var(--steel)" }}>· {b.gender}{disc && disc.indoorEligible && b.environment === "indoor" ? " · Salle" : ""}</span>
+                      </span>
+                      <span className="font-mono font-semibold" style={{ color: "var(--ink)" }}>
+                        {formatMark(disc, b.mark)}
+                        {disc && disc.hasWind && b.wind !== null && b.wind !== undefined && (
+                          <span className="font-mono text-xs ml-1" style={{ color: legal ? "var(--steel)" : "var(--track)" }}>({b.wind > 0 ? "+" : ""}{b.wind.toFixed(1)}{!legal ? " NH" : ""})</span>
+                        )}
+                      </span>
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--steel)" }}>{b.date ? new Date(b.date).toLocaleDateString("fr-FR") : ""}{b.date && b.compName ? " · " : ""}{b.compName}</p>
                   </button>
@@ -103,12 +111,12 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
               const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
               return (
                 <div key={i} className="flex items-center gap-1" style={{ borderBottom: i !== visibleHistory.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <button onClick={() => onOpenCompetition(h.compId, h.disciplineId, h.gender, h.round)}
+                  <button onClick={() => onOpenCompetition(h.compId, h.disciplineId, h.gender, h.round, h.environment)}
                     className="focus-ring flex-1 min-w-0 flex items-start justify-between text-sm py-2.5 text-left">
                     <div className="min-w-0">
                       <p style={{ color: "var(--track)" }}>{h.compName}</p>
                       <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: "var(--steel)" }}>
-                        <Calendar size={11} />{new Date(h.date).toLocaleDateString("fr-FR")} · {disc ? getLabel(disc, h.gender) : h.disciplineId} · {roundLabel(h.round)} · {h.place}e place
+                        <Calendar size={11} />{new Date(h.date).toLocaleDateString("fr-FR")} · {disc ? getLabel(disc, h.gender) : h.disciplineId}{disc && disc.indoorEligible ? ` · ${envLabel(h.environment)}` : ""} · {roundLabel(h.round)} · {h.place}e place
                       </p>
                     </div>
                     <span className="font-mono font-semibold shrink-0 ml-2" style={{ color: "var(--ink)" }}>{formatMark(disc, h.mark)}</span>

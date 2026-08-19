@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
-import { roundLabel } from "../lib/rounds";
+import { roundLabel, envLabel } from "../lib/rounds";
 import { parseTextTable } from "../lib/parsing";
 import { compareMarks } from "../lib/marks";
 import NameField from "./NameField";
 import MeasurementField from "./MeasurementField";
 import WindField from "./WindField";
 
-export default function ResultBlockForm({ initial, athletes, onSave, onCancel, lockedDisciplineId, lockedGender, lockedRound }) {
+export default function ResultBlockForm({ initial, athletes, onSave, onCancel, lockedDisciplineId, lockedGender, lockedEnvironment, lockedRound }) {
   const isLocked = !!(lockedDisciplineId && lockedGender);
   const [disciplineId, setDisciplineId] = useState(lockedDisciplineId || (initial ? initial.disciplineId : "100"));
   const [gender, setGender] = useState(lockedGender || (initial ? initial.gender : "H"));
@@ -46,7 +46,7 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
       .sort((a, b) => compareMarks(activeDiscipline, a.mark, b.mark))
       .map((r, i) => ({ place: i + 1, name: r.name.trim(), club: r.club.trim(), mark: r.mark, wind: r.wind === undefined ? null : r.wind }));
     if (clean.length === 0) return;
-    onSave({ disciplineId: activeDisciplineId, gender: activeGender, round: lockedRound, entries: clean });
+    onSave({ disciplineId: activeDisciplineId, gender: activeGender, environment: lockedEnvironment || "outdoor", round: lockedRound, entries: clean });
     if (!initial) setRows([{ place: 1, name: "", club: "", mark: null, wind: null }]);
   }
 
@@ -54,7 +54,7 @@ export default function ResultBlockForm({ initial, athletes, onSave, onCancel, l
     <div className="rounded-md p-4" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
       {isLocked ? (
         <p className="font-mono text-xs uppercase tracking-wide mb-4" style={{ color: "var(--steel)" }}>
-          {activeDiscipline ? getLabel(activeDiscipline, activeGender) : activeDisciplineId} · {activeGender === "H" ? "Hommes" : "Femmes"} · {roundLabel(lockedRound)}
+          {activeDiscipline ? getLabel(activeDiscipline, activeGender) : activeDisciplineId} · {activeGender === "H" ? "Hommes" : "Femmes"}{activeDiscipline && activeDiscipline.indoorEligible ? ` · ${envLabel(lockedEnvironment)}` : ""} · {roundLabel(lockedRound)}
         </p>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3 mb-4">

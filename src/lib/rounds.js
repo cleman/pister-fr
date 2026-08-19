@@ -29,3 +29,15 @@ export function defaultRound(blocksForFilter) {
   const finale = blocksForFilter.find((b) => b.round.type === "finale");
   return (finale || blocksForFilter[0]).round;
 }
+
+/* Indoor / plein air — un bloc de résultats a un environnement (par défaut
+   "outdoor" pour les données existantes, créées avant cette notion). */
+export function envLabel(env) {
+  return env === "indoor" ? "Salle (indoor)" : "Plein air";
+}
+
+/* Clé identifiant un bloc de façon unique : discipline + sexe + environnement
+   + tour. Utilisée partout où l'on doit retrouver/comparer des blocs. */
+export function blockKey(disciplineId, gender, environment, round) {
+  return `${disciplineId}|${gender}|${environment || "outdoor"}|${roundKey(round)}`;
+}

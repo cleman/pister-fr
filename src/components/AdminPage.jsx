@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, ShieldCheck, Trash2, Upload, UserPlus } from "lucide-react";
+import { Clock, Download, RotateCcw, ShieldCheck, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
-export default function AdminPage({ competitions, resultsStore, athletes, onRestoreBackup }) {
+export default function AdminPage({
+  competitions, resultsStore, athletes, trash, auditLog,
+  onRestoreBackup, onRestoreTrashItem, onPermanentlyDeleteTrashItem, onEmptyTrash,
+}) {
   const [invites, setInvites] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [email, setEmail] = useState("");
@@ -19,12 +22,7 @@ export default function AdminPage({ competitions, resultsStore, athletes, onRest
   );
 
   function handleExport() {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      competitions,
-      resultsStore,
-      athletes,
-    };
+    const payload = { exportedAt: new Date().toISOString(), competitions, resultsStore, athletes };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -88,7 +86,6 @@ export default function AdminPage({ competitions, resultsStore, athletes, onRest
     await supabase.from("editor_invites").delete().eq("email", invEmail);
     refresh();
   }
-
   async function changeProfileRole(id, newRole) {
     await supabase.from("profiles").update({ role: newRole }).eq("id", id);
     refresh();
@@ -96,6 +93,11 @@ export default function AdminPage({ competitions, resultsStore, athletes, onRest
   async function removeProfile(id) {
     await supabase.from("profiles").delete().eq("id", id);
     refresh();
+  }
+
+  function handleEmptyTrash() {
+    if (!window.confirm(`Vider définitivement la corbeille (${trash.length} élément(s)) ? Cette action est irréversible.`)) return;
+    onEmptyTrash();
   }
 
   return (
@@ -113,7 +115,7 @@ export default function AdminPage({ competitions, resultsStore, athletes, onRest
       </div>
 
       {/* SAUVEGARDE */}
-      <div className="rounded-md p-4 mb-10" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
+      <div className="rounded-md p-4 mb-8" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
         <p className="font-mono text-xs uppercase tracking-wider mb-2" style={{ color: "var(--steel)" }}>Sauvegarde</p>
         <p className="text-xs mb-3" style={{ color: "var(--steel)" }}>
           Supabase (plan gratuit) ne fait pas de sauvegarde automatique. Exporte régulièrement un fichier de secours.
@@ -129,6 +131,56 @@ export default function AdminPage({ competitions, resultsStore, athletes, onRest
         </div>
         {importError && <p className="text-xs font-mono mt-2" style={{ color: "var(--track)" }}>{importError}</p>}
         {importMsg && <p className="text-xs font-mono mt-2" style={{ color: "var(--lane-yellow)" }}>{importMsg}</p>}
+      </div>
+
+      {/* CORBEILLE */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-mono text-xs uppercase tracking-wider" style={{ color: "var(--steel)" }}>Corbeille ({trash.length})</p>
+          {trash.length > 0 && (
+            <button onClick={handleEmptyTrash} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--track)", color: "var(--track)" }}>
+              <X size={11} /> Vider la corbeille
+            </button>
+          )}
+        </div>
+        <p className="text-xs mb-3" style={{ color: "var(--steel)" }}>
+          Compétitions, tableaux de résultats et performances individuelles supprimés — restaurables tant qu'ils sont ici. Pas de purge automatique : à vider manuellement de temps en temps.
+        </p>
+        {trash.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--steel)" }}>Corbeille vide.</p>
+        ) : (
+          <div className="space-y-1">
+            {trash.map((t) => (
+              <div key={t.id} className="flex items-center justify-between text-sm py-1.5 flex-wrap gap-2" style={{ borderBottom: "1px solid var(--line)" }}>
+                <div className="min-w-0">
+                  <span style={{ color: "var(--ink)" }}>{t.label}</span>
+                  <p className="font-mono text-[10px]" style={{ color: "var(--steel)" }}>{t.kind} · {new Date(t.deletedAt).toLocaleString("fr-FR")} · {t.deletedBy}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => onRestoreTrashItem(t.id)} className="focus-ring flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}><RotateCcw size={11} /> Restaurer</button>
+                  <button onClick={() => onPermanentlyDeleteTrashItem(t.id)} aria-label="Supprimer définitivement" style={{ color: "var(--track)" }}><Trash2 size={14} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* JOURNAL D'ACTIVITÉ */}
+      <div className="mb-8">
+        <p className="font-mono text-xs uppercase tracking-wider mb-2 flex items-center gap-1" style={{ color: "var(--steel)" }}><Clock size={12} /> Journal d'activité (300 dernières actions)</p>
+        {auditLog.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--steel)" }}>Aucune activité enregistrée pour le moment.</p>
+        ) : (
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {auditLog.map((entry) => (
+              <div key={entry.id} className="text-xs py-1" style={{ borderBottom: "1px solid var(--line)" }}>
+                <span className="font-mono" style={{ color: "var(--steel)" }}>{new Date(entry.at).toLocaleString("fr-FR")} · {entry.by}</span>
+                <span style={{ color: "var(--ink)" }}> — {entry.action}{entry.label ? ` : ${entry.label}` : ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <p className="font-mono text-xs mb-8" style={{ color: "var(--steel)" }}>

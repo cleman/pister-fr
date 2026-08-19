@@ -21,6 +21,7 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
           rows.push({
             compId, compName: comp.name, date: comp.date,
             disciplineId: block.disciplineId, gender: block.gender, round: block.round,
+            environment: block.environment || "outdoor",
             place: e.place, mark: e.mark, wind: e.wind, club: e.club,
           });
         }
@@ -33,13 +34,18 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
 
 /* classement global (toutes compétitions et tours confondus) à partir des
    vraies données saisies : meilleure marque de chaque athlète pour une
-   discipline + sexe donnés. `discipline` est l'objet complet (pas juste
-   l'id) car le sens de "meilleur" dépend de son type. */
-export function computeGlobalRanking(discipline, gender, resultsStore, athletes, competitions) {
+   discipline + sexe + environnement donnés. `discipline` est l'objet
+   complet (pas juste l'id) car le sens de "meilleur" dépend de son type.
+   `environment` ('outdoor'|'indoor') ne s'applique que si la discipline
+   est éligible à l'indoor ; sinon toutes les données sont considérées
+   plein air. */
+export function computeGlobalRanking(discipline, gender, environment, resultsStore, athletes, competitions) {
+  const env = discipline.indoorEligible ? (environment || "outdoor") : "outdoor";
   const bestByAthlete = {};
   Object.entries(resultsStore).forEach(([compId, blocks]) => {
     (blocks || []).forEach((block) => {
       if (block.disciplineId !== discipline.id || block.gender !== gender) return;
+      if ((block.environment || "outdoor") !== env) return;
       block.entries.forEach((e) => {
         const cur = bestByAthlete[e.athleteId];
         if (!cur || isBetterMark(discipline, e.mark, cur.mark)) {

@@ -149,6 +149,13 @@ function normalizeDisciplineLabel(raw) {
   return normalizeLabel(s);
 }
 
+/* détecte la mention indoor AVANT qu'elle ne soit effacée par la
+   normalisation ci-dessus (utilisée pour classer une ligne en salle ou
+   plein air lors du collage d'un historique) */
+function detectEnvironment(raw) {
+  return /\b(piste courte|salle|indoor)\b/i.test(String(raw || "")) ? "indoor" : "outdoor";
+}
+
 const FR_MONTHS = {
   janv: 1, jan: 1, fev: 2, mars: 3, avr: 4, mai: 5, juin: 6,
   juil: 7, aout: 8, sept: 9, oct: 10, nov: 11, dec: 12,
@@ -223,6 +230,7 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
     if (!disciplineId) return;
     const discipline = disciplinesList.find((d) => d.id === disciplineId);
     if (!discipline) return;
+    const environment = discipline.indoorEligible ? detectEnvironment(cols[discIdx]) : "outdoor";
 
     let dateIdx = -1, date = null;
     for (let i = 0; i < cols.length; i++) {
@@ -243,7 +251,7 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
     const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*$/, "").trim();
     const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*$/, "").trim() : "";
 
-    rows.push({ disciplineId, date, mark, wind, competition, club });
+    rows.push({ disciplineId, date, mark, wind, competition, club, environment });
   });
   return rows;
 }
@@ -253,7 +261,7 @@ export function parseAthleteHistoryText(text, disciplinesList, aliases, referenc
    année" de la FFA) : la discipline est fournie explicitement plutôt que
    déduite du texte. Reconnaît aussi une éventuelle colonne "année" seule
    (redondante avec la date complète) sans la confondre avec une marque. */
-export function parseSingleDisciplineHistoryText(text, discipline, referenceYear) {
+export function parseSingleDisciplineHistoryText(text, discipline, referenceYear, environment) {
   const year = referenceYear || new Date().getFullYear();
   const rows = [];
   (text || "").split(/\r?\n+/).forEach((line) => {
@@ -278,7 +286,7 @@ export function parseSingleDisciplineHistoryText(text, discipline, referenceYear
     const competition = (candidates[candidates.length - 1] || "Compétition (à préciser)").replace(/\*$/, "").trim();
     const club = candidates.length >= 2 ? candidates[candidates.length - 2].replace(/\*$/, "").trim() : "";
 
-    rows.push({ disciplineId: discipline.id, date, mark, wind, competition, club });
+    rows.push({ disciplineId: discipline.id, date, mark, wind, competition, club, environment: environment || "outdoor" });
   });
   return rows;
 }

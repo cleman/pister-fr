@@ -4,31 +4,39 @@ import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { TIERS } from "../data/competitions";
 import { roundKey, defaultRound } from "../lib/rounds";
 import { useAuth } from "../lib/auth";
+import DisciplineChips from "./DisciplineChips";
+import EnvironmentToggle from "./EnvironmentToggle";
 import RoundPicker from "./RoundPicker";
 import ResultBlockForm from "./ResultBlockForm";
 import ResultsTable from "./ResultsTable";
 
 export default function CompetitionEditorPage({
   comp, blocks, athletes, mode,
-  initialDisciplineId, initialGender, initialRound,
+  initialDisciplineId, initialGender, initialRound, initialEnvironment,
   onModeChange, onBack, onSelectAthlete, onSaveBlock, onUpdateBlock, onDeleteBlock, onDeleteEntry, onToggleComplete,
 }) {
   const { canEdit, isAdmin } = useAuth();
   const effectiveMode = canEdit ? mode : "view";
   const [filterGender, setFilterGender] = useState(initialGender || (blocks[0] ? blocks[0].gender : "H"));
   const [filterDisciplineId, setFilterDisciplineId] = useState(initialDisciplineId || (blocks[0] ? blocks[0].disciplineId : "100"));
-  const blocksForFilter = blocks.filter((b) => b.disciplineId === filterDisciplineId && b.gender === filterGender);
+  const filterDiscipline = DISCIPLINES.find((d) => d.id === filterDisciplineId);
+  const [filterEnv, setFilterEnv] = useState(initialEnvironment || "outdoor");
+  const effectiveEnv = filterDiscipline.indoorEligible ? filterEnv : "outdoor";
+
+  const blocksForFilter = blocks.filter((b) => b.disciplineId === filterDisciplineId && b.gender === filterGender && (b.environment || "outdoor") === effectiveEnv);
   const [activeRound, setActiveRound] = useState(initialRound || defaultRound(blocksForFilter));
   const [editing, setEditing] = useState(false);
 
-  const activeDiscipline = DISCIPLINES.find((d) => d.id === filterDisciplineId);
   const activeBlock = activeRound ? blocksForFilter.find((b) => roundKey(b.round) === roundKey(activeRound)) || null : null;
   const activeBlockIndex = activeBlock ? blocks.indexOf(activeBlock) : -1;
 
-  function changeFilter(nextDisciplineId, nextGender) {
+  function changeFilter(nextDisciplineId, nextGender, nextEnv) {
     setFilterDisciplineId(nextDisciplineId);
     setFilterGender(nextGender);
-    const nb = blocks.filter((b) => b.disciplineId === nextDisciplineId && b.gender === nextGender);
+    setFilterEnv(nextEnv);
+    const nd = DISCIPLINES.find((d) => d.id === nextDisciplineId);
+    const env = nd.indoorEligible ? nextEnv : "outdoor";
+    const nb = blocks.filter((b) => b.disciplineId === nextDisciplineId && b.gender === nextGender && (b.environment || "outdoor") === env);
     setActiveRound(defaultRound(nb));
     setEditing(false);
   }
@@ -36,6 +44,8 @@ export default function CompetitionEditorPage({
     setActiveRound(round);
     setEditing(false);
   }
+
+  const hasDataFor = (d) => blocks.some((b) => b.disciplineId === d.id && b.gender === filterGender);
 
   return (
     <section className="max-w-3xl mx-auto px-6 py-10">
@@ -66,28 +76,22 @@ export default function CompetitionEditorPage({
         )}
       </div>
 
-      {/* FILTRE discipline/sexe */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      {/* FILTRE sexe / environnement */}
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="flex rounded-sm overflow-hidden" style={{ border: "1px solid var(--ink)" }}>
           {["H", "F"].map((g) => (
-            <button key={g} onClick={() => changeFilter(filterDisciplineId, g)} className="focus-ring font-display text-sm px-4 py-2"
+            <button key={g} onClick={() => changeFilter(filterDisciplineId, g, filterEnv)} className="focus-ring font-display text-sm px-4 py-2"
               style={{ background: filterGender === g ? "var(--ink)" : "transparent", color: filterGender === g ? "#fff" : "var(--ink)" }}>{g === "H" ? "Hommes" : "Femmes"}</button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {DISCIPLINES.map((d) => {
-            const has = blocks.some((b) => b.disciplineId === d.id && b.gender === filterGender);
-            const activeChip = filterDisciplineId === d.id;
-            return (
-              <button key={d.id} onClick={() => changeFilter(d.id, filterGender)}
-                className="focus-ring relative font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm"
-                style={{ background: activeChip ? "var(--track)" : "var(--card)", color: activeChip ? "#fff" : "var(--ink)", border: "1px solid " + (activeChip ? "var(--track)" : "var(--line)") }}>
-                {getLabel(d, filterGender)}
-                {has && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: activeChip ? "#fff" : "var(--lane-yellow)" }} />}
-              </button>
-            );
-          })}
-        </div>
+        {filterDiscipline.indoorEligible && (
+          <EnvironmentToggle environment={effectiveEnv} onChange={(env) => changeFilter(filterDisciplineId, filterGender, env)} />
+        )}
+      </div>
+
+      {/* FILTRE discipline, groupé par catégorie */}
+      <div className="mb-4">
+        <DisciplineChips gender={filterGender} activeId={filterDisciplineId} onSelect={(id) => changeFilter(id, filterGender, filterEnv)} hasDataFor={hasDataFor} />
       </div>
 
       {/* SÉLECTEUR de tour */}
@@ -98,11 +102,12 @@ export default function CompetitionEditorPage({
         activeRound ? (
           editing || !activeBlock ? (
             <ResultBlockForm
-              key={`${filterDisciplineId}-${filterGender}-${roundKey(activeRound)}-${editing}`}
+              key={`${filterDisciplineId}-${filterGender}-${effectiveEnv}-${roundKey(activeRound)}-${editing}`}
               initial={activeBlock}
               athletes={athletes}
               lockedDisciplineId={filterDisciplineId}
               lockedGender={filterGender}
+              lockedEnvironment={effectiveEnv}
               lockedRound={activeRound}
               onSave={(data) => { activeBlock ? onUpdateBlock(activeBlockIndex, data) : onSaveBlock(data); setEditing(false); }}
               onCancel={activeBlock ? () => setEditing(false) : undefined}
@@ -113,17 +118,22 @@ export default function CompetitionEditorPage({
                 <button onClick={() => setEditing(true)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>Modifier</button>
                 <button onClick={() => { onDeleteBlock(activeBlockIndex); setActiveRound(defaultRound(blocksForFilter.filter((b) => b !== activeBlock))); }} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: "1px solid var(--line)", color: "var(--track)" }}><Trash2 size={11} /> Supprimer</button>
               </div>
-              <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} onDeleteEntry={isAdmin ? (athleteId) => onDeleteEntry(filterDisciplineId, filterGender, activeRound, athleteId) : undefined} />
+              <ResultsTable
+                disciplineId={filterDisciplineId}
+                entries={activeBlock.entries}
+                onSelectAthlete={onSelectAthlete}
+                onDeleteEntry={isAdmin ? (athleteId) => onDeleteEntry(filterDisciplineId, filterGender, effectiveEnv, activeRound, athleteId) : undefined}
+              />
             </div>
           )
         ) : (
-          <p className="text-sm" style={{ color: "var(--steel)" }}>Choisis un tour ci-dessus (bouton "Tour") pour commencer la saisie de {getLabel(activeDiscipline, filterGender)}.</p>
+          <p className="text-sm" style={{ color: "var(--steel)" }}>Choisis un tour ci-dessus (bouton "Tour") pour commencer la saisie de {getLabel(filterDiscipline, filterGender)}.</p>
         )
       ) : activeBlock ? (
         <ResultsTable disciplineId={filterDisciplineId} entries={activeBlock.entries} onSelectAthlete={onSelectAthlete} />
       ) : (
         <div className="rounded-md p-6 text-center" style={{ border: "1px dashed var(--line)", background: "var(--card)" }}>
-          <p className="text-sm mb-3" style={{ color: "var(--steel)" }}>Aucun résultat saisi pour {getLabel(activeDiscipline, filterGender)} · {filterGender === "H" ? "Hommes" : "Femmes"}.</p>
+          <p className="text-sm mb-3" style={{ color: "var(--steel)" }}>Aucun résultat saisi pour {getLabel(filterDiscipline, filterGender)} · {filterGender === "H" ? "Hommes" : "Femmes"}.</p>
           {canEdit && (
             <button onClick={() => onModeChange("edit")} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>Passer en mode éditeur</button>
           )}

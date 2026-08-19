@@ -47,4 +47,8 @@ export function isBetterMark(discipline, a, b) {
   return compareMarks(discipline, a, b) < 0;
 }
 
+export function isLegalWind(wind) {
+  return wind === null || wind === undefined || wind <= 2.0;
+}
+
 export { CLOCK_IDS };

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Plus } from "lucide-react";
-import { DISCIPLINES, DISCIPLINE_ALIASES, getLabel } from "../data/disciplines";
+import { DISCIPLINES, DISCIPLINE_ALIASES, disciplinesByCategory, getLabel } from "../data/disciplines";
 import MeasurementField from "./MeasurementField";
+import EnvironmentToggle from "./EnvironmentToggle";
 import { parseAthleteHistoryText, parseSingleDisciplineHistoryText } from "../lib/parsing";
 
 const ROUND_CHOICES = [
@@ -10,11 +11,25 @@ const ROUND_CHOICES = [
   { type: "serie", heat: 1, label: "Série" },
 ];
 
+function DisciplineSelect({ gender, value, onChange }) {
+  const groups = disciplinesByCategory(gender);
+  return (
+    <select className="field" value={value} onChange={(e) => onChange(e.target.value)}>
+      {groups.map((cat) => (
+        <optgroup key={cat.id} label={cat.label}>
+          {cat.disciplines.map((d) => (<option key={d.id} value={d.id}>{getLabel(d, gender)}</option>))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
 export default function AddPerformancePanel({ athlete, competitions, onAddPerformance }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("single"); // 'single' | 'bulk'
   const [gender, setGender] = useState(athlete.gender || "H");
   const [disciplineId, setDisciplineId] = useState("100");
+  const [environment, setEnvironment] = useState("outdoor");
   const [round, setRound] = useState(ROUND_CHOICES[0]);
   const [mark, setMark] = useState(null);
   const [wind, setWind] = useState(null);
@@ -28,11 +43,13 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
 
   const [bulkText, setBulkText] = useState("");
   const [bulkDisciplineId, setBulkDisciplineId] = useState(""); // "" = détection automatique multi-discipline
+  const [bulkEnvironment, setBulkEnvironment] = useState("outdoor"); // utilisé seulement en mode discipline unique
   const [bulkRows, setBulkRows] = useState(null);
   const [bulkError, setBulkError] = useState("");
   const [bulkInfo, setBulkInfo] = useState("");
 
   const discipline = DISCIPLINES.find((d) => d.id === disciplineId);
+  const bulkDiscipline = bulkDisciplineId ? DISCIPLINES.find((d) => d.id === bulkDisciplineId) : null;
 
   async function handleSingleSave() {
     if (typeof mark !== "number" || isNaN(mark) || mark <= 0) { setMsg("Marque manquante ou invalide."); return; }
@@ -46,7 +63,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       athleteClub: club || athlete.club || "",
       competitionId: compMode === "existing" ? competitionId : null,
       newCompetition: compMode === "new" ? { name: newCompName.trim(), date: newCompDate, tier: "circuit" } : null,
-      disciplineId, gender, round, mark, wind,
+      disciplineId, gender, environment: discipline.indoorEligible ? environment : "outdoor", round, mark, wind,
     });
     setBusy(false);
     setMsg("Performance ajoutée.");
@@ -57,7 +74,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
   function analyzeBulk() {
     const totalLines = bulkText.split(/\r?\n+/).map((l) => l.trim()).filter(Boolean).length;
     const rows = bulkDisciplineId
-      ? parseSingleDisciplineHistoryText(bulkText, DISCIPLINES.find((d) => d.id === bulkDisciplineId))
+      ? parseSingleDisciplineHistoryText(bulkText, bulkDiscipline, undefined, bulkDiscipline.indoorEligible ? bulkEnvironment : "outdoor")
       : parseAthleteHistoryText(bulkText, DISCIPLINES, DISCIPLINE_ALIASES);
     setBulkError("");
     setBulkInfo("");
@@ -104,7 +121,7 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
         athleteClub: row.club || "",
         competitionId: compId || null,
         newCompetition: compId ? null : { name: row.competition || "Compétition (à préciser)", date: row.date || new Date().toISOString().slice(0, 10), tier: "circuit" },
-        disciplineId: row.disciplineId, gender, round: ROUND_CHOICES[0], mark: row.mark, wind: row.wind,
+        disciplineId: row.disciplineId, gender, environment: disc.indoorEligible ? (row.environment || "outdoor") : "outdoor", round: ROUND_CHOICES[0], mark: row.mark, wind: row.wind,
       });
       nameToId[key] = usedId;
     }
@@ -142,15 +159,15 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
       {mode === "single" ? (
         <div className="space-y-3">
           <div className="grid sm:grid-cols-2 gap-2">
-            <select className="field" value={disciplineId} onChange={(e) => setDisciplineId(e.target.value)}>
-              {DISCIPLINES.map((d) => (<option key={d.id} value={d.id}>{getLabel(d, gender)}</option>))}
-            </select>
+            <DisciplineSelect gender={gender} value={disciplineId} onChange={setDisciplineId} />
             <div className="flex rounded-sm overflow-hidden" style={{ border: "1px solid var(--line)" }}>
               {ROUND_CHOICES.map((r) => (
                 <button key={r.label} type="button" onClick={() => setRound(r)} className="flex-1 font-mono text-[10px] uppercase px-2 py-2" style={{ background: round.type === r.type ? "var(--ink)" : "var(--card)", color: round.type === r.type ? "#fff" : "var(--ink)" }}>{r.label}</button>
               ))}
             </div>
           </div>
+
+          {discipline.indoorEligible && <EnvironmentToggle environment={environment} onChange={setEnvironment} />}
 
           <div className="flex items-center gap-3">
             <MeasurementField discipline={discipline} value={mark} onChange={setMark} />
@@ -192,10 +209,17 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
             <label className="font-mono text-[10px] uppercase tracking-wide block mb-1" style={{ color: "var(--steel)" }}>
               Si le texte ne mentionne jamais la discipline (ex. bilan annuel d'une seule épreuve) :
             </label>
-            <select className="field" value={bulkDisciplineId} onChange={(e) => setBulkDisciplineId(e.target.value)}>
-              <option value="">Détection automatique (texte multi-disciplines)</option>
-              {DISCIPLINES.map((d) => (<option key={d.id} value={d.id}>Discipline unique : {getLabel(d, gender)}</option>))}
-            </select>
+            <div className="flex flex-wrap gap-2 items-center">
+              <select className="field" style={{ width: "auto" }} value={bulkDisciplineId} onChange={(e) => setBulkDisciplineId(e.target.value)}>
+                <option value="">Détection automatique (texte multi-disciplines)</option>
+                {disciplinesByCategory(gender).map((cat) => (
+                  <optgroup key={cat.id} label={cat.label}>
+                    {cat.disciplines.map((d) => (<option key={d.id} value={d.id}>{getLabel(d, gender)}</option>))}
+                  </optgroup>
+                ))}
+              </select>
+              {bulkDiscipline && bulkDiscipline.indoorEligible && <EnvironmentToggle environment={bulkEnvironment} onChange={setBulkEnvironment} />}
+            </div>
           </div>
           <textarea
             className="field font-mono text-xs"
@@ -215,9 +239,10 @@ export default function AddPerformancePanel({ athlete, competitions, onAddPerfor
                 const disc = DISCIPLINES.find((d) => d.id === row.disciplineId);
                 return (
                   <div key={i} className="flex items-center gap-2 flex-wrap p-2 rounded-sm" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
-                    <select className="field" style={{ width: "auto" }} value={row.disciplineId} onChange={(e) => updateBulkRow(i, { disciplineId: e.target.value })}>
-                      {DISCIPLINES.map((d) => (<option key={d.id} value={d.id}>{getLabel(d, gender)}</option>))}
-                    </select>
+                    <DisciplineSelect gender={gender} value={row.disciplineId} onChange={(v) => updateBulkRow(i, { disciplineId: v })} />
+                    {disc && disc.indoorEligible && (
+                      <EnvironmentToggle environment={row.environment || "outdoor"} onChange={(env) => updateBulkRow(i, { environment: env })} />
+                    )}
                     <MeasurementField discipline={disc} value={row.mark} onChange={(v) => updateBulkRow(i, { mark: v })} />
                     <input className="field flex-1 min-w-[8rem]" placeholder="Compétition" value={row.competition} onChange={(e) => updateBulkRow(i, { competition: e.target.value })} />
                     <input className="field" type="date" style={{ width: "9rem" }} value={row.date || ""} onChange={(e) => updateBulkRow(i, { date: e.target.value })} />
