@@ -32,6 +32,25 @@ export function getAthleteHistory(athleteId, resultsStore, competitions) {
   return rows;
 }
 
+/* Vue d'ensemble d'UNE compétition : combine tous les tours (séries, demi-
+   finales, finale(s)) d'une même discipline/sexe/environnement — la
+   meilleure marque de chaque athlète, tous tours confondus. Calculée à la
+   volée, jamais stockée. */
+export function computeCompetitionOverview(discipline, blocksForFilter) {
+  const bestByAthlete = {};
+  blocksForFilter.forEach((block) => {
+    block.entries.forEach((e) => {
+      const cur = bestByAthlete[e.athleteId];
+      if (!cur || isBetterMark(discipline, e.mark, cur.mark)) {
+        bestByAthlete[e.athleteId] = { ...e };
+      }
+    });
+  });
+  return Object.values(bestByAthlete)
+    .sort((a, b) => compareMarks(discipline, a.mark, b.mark))
+    .map((e, i) => ({ ...e, place: i + 1 }));
+}
+
 /* classement global (toutes compétitions et tours confondus) à partir des
    vraies données saisies : meilleure marque de chaque athlète pour une
    discipline + sexe + environnement donnés. `discipline` est l'objet

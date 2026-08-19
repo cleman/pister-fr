@@ -5,6 +5,7 @@ import { computeGlobalRanking } from "../lib/ranking";
 import { isLegalWind } from "../lib/marks";
 import DisciplineChips from "./DisciplineChips";
 import EnvironmentToggle from "./EnvironmentToggle";
+import Podium from "./Podium";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -93,13 +94,16 @@ export default function ClassementPage({
             <button onClick={onGoCalendar} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>Aller au calendrier</button>
           </div>
         ) : (
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--line)", background: "var(--card)" }}>
-            {ranking.map((a, idx) => {
+          <>
+            {page === 1 && <Podium top3={ranking.slice(0, 3)} onSelectAthlete={onSelectAthlete} />}
+            {(page === 1 ? ranking.slice(3) : ranking).length > 0 && (
+            <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--line)", background: "var(--card)" }}>
+              {(page === 1 ? ranking.slice(3) : ranking).map((a, idx, arr) => {
               const legal = isLegalWind(a.wind);
               return (
                 <button key={a.athleteId} onClick={() => onSelectAthlete(a.athleteId)}
                   className="focus-ring row-hover w-full text-left flex items-center gap-4 px-4 py-3 relative"
-                  style={{ borderBottom: idx !== ranking.length - 1 ? "1px solid var(--line)" : "none" }}>
+                  style={{ borderBottom: idx !== arr.length - 1 ? "1px solid var(--line)" : "none" }}>
                   <span className="accent-bar absolute left-0 top-0 bottom-0 w-1 opacity-0" style={{ background: "var(--track)" }} />
                   <div className="font-display font-bold text-sm w-9 h-9 rounded-sm flex items-center justify-center shrink-0"
                     style={{ background: a.rank === 1 ? "var(--lane-yellow)" : "var(--paper)", color: "var(--ink)", border: "2px solid var(--ink)" }}>{a.rank}</div>
@@ -122,7 +126,9 @@ export default function ClassementPage({
                 </button>
               );
             })}
-          </div>
+            </div>
+            )}
+          </>
         )}
 
         {fullRanking.length > 0 && (

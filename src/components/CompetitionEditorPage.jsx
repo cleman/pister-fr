@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { ArrowLeft, CheckCircle2, Eye, Info, MapPin, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ExternalLink, Eye, Info, MapPin, Pencil, Settings, Trash2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { TIERS } from "../data/competitions";
 import { roundKey, defaultRound } from "../lib/rounds";
+import { computeCompetitionOverview } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import DisciplineChips from "./DisciplineChips";
 import EnvironmentToggle from "./EnvironmentToggle";
@@ -10,10 +11,50 @@ import RoundPicker from "./RoundPicker";
 import ResultBlockForm from "./ResultBlockForm";
 import ResultsTable from "./ResultsTable";
 
+function ChangeRoundForm({ current, existingRounds, onApply, onCancel }) {
+  const [type, setType] = useState(current.type === "overview" ? "finale" : current.type);
+  const [heat, setHeat] = useState(current.heat || 1);
+  return (
+    <div className="flex items-center gap-2 flex-wrap p-2 rounded-sm mb-2" style={{ background: "var(--paper)", border: "1px solid var(--line)" }}>
+      <select className="field" style={{ width: "auto" }} value={type} onChange={(e) => setType(e.target.value)}>
+        <option value="finale">Finale</option>
+        <option value="demi">Demi-finale</option>
+        <option value="serie">Série</option>
+      </select>
+      <input className="field" style={{ width: "5rem" }} type="number" min="1" value={heat} onChange={(e) => setHeat(parseInt(e.target.value, 10) || 1)} />
+      <button onClick={() => onApply({ type, heat })} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1.5 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>Appliquer</button>
+      <button onClick={onCancel} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1.5" style={{ color: "var(--steel)" }}>Annuler</button>
+    </div>
+  );
+}
+
+function EditMetaForm({ comp, onSave, onCancel }) {
+  const [name, setName] = useState(comp.name);
+  const [date, setDate] = useState(comp.date);
+  const [location, setLocation] = useState(comp.location || "");
+  const [tier, setTier] = useState(comp.tier);
+  const [resultsUrl, setResultsUrl] = useState(comp.resultsUrl || "");
+  return (
+    <div className="rounded-md p-4 mb-6 grid sm:grid-cols-2 gap-3" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
+      <input className="field sm:col-span-2" placeholder="Nom de la compétition" value={name} onChange={(e) => setName(e.target.value)} />
+      <input className="field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <select className="field" value={tier} onChange={(e) => setTier(e.target.value)}>
+        {Object.entries(TIERS).map(([key, t]) => (<option key={key} value={key}>{t.label}</option>))}
+      </select>
+      <input className="field sm:col-span-2" placeholder="Lieu" value={location} onChange={(e) => setLocation(e.target.value)} />
+      <input className="field sm:col-span-2" placeholder="Lien résultats/fiche horaire (optionnel)" value={resultsUrl} onChange={(e) => setResultsUrl(e.target.value)} />
+      <div className="sm:col-span-2 flex gap-2">
+        <button onClick={() => onSave({ name: name.trim(), date, location: location.trim(), tier, resultsUrl: resultsUrl.trim() })} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}>Enregistrer</button>
+        <button onClick={onCancel} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ color: "var(--steel)" }}>Annuler</button>
+      </div>
+    </div>
+  );
+}
+
 export default function CompetitionEditorPage({
   comp, blocks, athletes, mode,
   initialDisciplineId, initialGender, initialRound, initialEnvironment,
-  onModeChange, onBack, onSelectAthlete, onSaveBlock, onUpdateBlock, onDeleteBlock, onDeleteEntry, onToggleComplete,
+  onModeChange, onBack, onSelectAthlete, onSaveBlock, onUpdateBlock, onDeleteBlock, onDeleteEntry, onToggleComplete, onUpdateMeta, onChangeRound,
 }) {
   const { canEdit, isAdmin } = useAuth();
   const effectiveMode = canEdit ? mode : "view";
@@ -26,9 +67,13 @@ export default function CompetitionEditorPage({
   const blocksForFilter = blocks.filter((b) => b.disciplineId === filterDisciplineId && b.gender === filterGender && (b.environment || "outdoor") === effectiveEnv);
   const [activeRound, setActiveRound] = useState(initialRound || defaultRound(blocksForFilter));
   const [editing, setEditing] = useState(false);
+  const [changingRound, setChangingRound] = useState(false);
+  const [editingMeta, setEditingMeta] = useState(false);
 
-  const activeBlock = activeRound ? blocksForFilter.find((b) => roundKey(b.round) === roundKey(activeRound)) || null : null;
+  const isOverview = activeRound && activeRound.type === "overview";
+  const activeBlock = activeRound && !isOverview ? blocksForFilter.find((b) => roundKey(b.round) === roundKey(activeRound)) || null : null;
   const activeBlockIndex = activeBlock ? blocks.indexOf(activeBlock) : -1;
+  const overviewEntries = isOverview ? computeCompetitionOverview(filterDiscipline, blocksForFilter) : null;
 
   function changeFilter(nextDisciplineId, nextGender, nextEnv) {
     setFilterDisciplineId(nextDisciplineId);
@@ -39,10 +84,21 @@ export default function CompetitionEditorPage({
     const nb = blocks.filter((b) => b.disciplineId === nextDisciplineId && b.gender === nextGender && (b.environment || "outdoor") === env);
     setActiveRound(defaultRound(nb));
     setEditing(false);
+    setChangingRound(false);
   }
   function selectRound(round) {
     setActiveRound(round);
     setEditing(false);
+    setChangingRound(false);
+  }
+  async function applyRoundChange(newRound) {
+    const others = blocksForFilter.filter((b) => b !== activeBlock).map((b) => b.round);
+    if (others.some((r) => roundKey(r) === roundKey(newRound))) {
+      window.alert("Ce tour existe déjà pour cette discipline. Choisis un autre numéro.");
+      return;
+    }
+    const ok = await onChangeRound(activeBlockIndex, newRound);
+    if (ok !== false) { setActiveRound(newRound); setChangingRound(false); }
   }
 
   const hasDataFor = (d) => blocks.some((b) => b.disciplineId === d.id && b.gender === filterGender);
@@ -51,7 +107,7 @@ export default function CompetitionEditorPage({
     <section className="max-w-3xl mx-auto px-6 py-10">
       <button onClick={onBack} className="focus-ring flex items-center gap-2 font-mono text-xs uppercase tracking-wide mb-6" style={{ color: "var(--steel)" }}><ArrowLeft size={14} /> Retour au calendrier</button>
 
-      <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+      <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "var(--track)" }}>
             <span className="px-1.5 py-0.5 rounded-sm mr-2" style={TIERS[comp.tier].style}>{TIERS[comp.tier].label}</span>
@@ -59,9 +115,15 @@ export default function CompetitionEditorPage({
           </p>
           <h1 className="font-display font-semibold text-3xl mb-1" style={{ color: "var(--ink)" }}>{comp.name}</h1>
           {comp.location && <p className="text-sm flex items-center gap-1" style={{ color: "var(--steel)" }}><MapPin size={13} />{comp.location}</p>}
+          {comp.resultsUrl && (
+            <a href={comp.resultsUrl} target="_blank" rel="noreferrer" className="focus-ring text-sm flex items-center gap-1 mt-1" style={{ color: "var(--track)" }}>
+              <ExternalLink size={13} /> Résultats officiels
+            </a>
+          )}
         </div>
         {canEdit && (
           <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setEditingMeta((v) => !v)} aria-label="Modifier les infos" className="focus-ring p-2 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}><Settings size={15} /></button>
             <button onClick={onToggleComplete}
               className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm"
               style={{ background: comp.manualComplete ? "var(--lane-yellow)" : "var(--card)", color: "var(--ink)", border: "1px solid " + (comp.manualComplete ? "var(--lane-yellow)" : "var(--line)") }}>
@@ -75,6 +137,10 @@ export default function CompetitionEditorPage({
           </div>
         )}
       </div>
+
+      {canEdit && editingMeta && (
+        <EditMetaForm comp={comp} onCancel={() => setEditingMeta(false)} onSave={(patch) => { onUpdateMeta(patch); setEditingMeta(false); }} />
+      )}
 
       {/* FILTRE sexe / environnement */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -98,7 +164,12 @@ export default function CompetitionEditorPage({
       <RoundPicker blocksForFilter={blocksForFilter} activeRound={activeRound} onSelect={selectRound} showAdd={effectiveMode === "edit"} />
 
       {/* CONTENU */}
-      {effectiveMode === "edit" ? (
+      {isOverview ? (
+        <div>
+          <p className="text-xs mb-3 flex items-center gap-2" style={{ color: "var(--steel)" }}><Info size={13} /> Calculée automatiquement : meilleure marque de chaque athlète, tous tours confondus. Rien à saisir ici — modifie les tours individuels ci-dessus.</p>
+          <ResultsTable disciplineId={filterDisciplineId} entries={overviewEntries} onSelectAthlete={onSelectAthlete} />
+        </div>
+      ) : effectiveMode === "edit" ? (
         activeRound ? (
           editing || !activeBlock ? (
             <ResultBlockForm
@@ -114,10 +185,15 @@ export default function CompetitionEditorPage({
             />
           ) : (
             <div>
-              <div className="flex items-center justify-end gap-2 mb-2">
-                <button onClick={() => setEditing(true)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>Modifier</button>
-                <button onClick={() => { onDeleteBlock(activeBlockIndex); setActiveRound(defaultRound(blocksForFilter.filter((b) => b !== activeBlock))); }} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: "1px solid var(--line)", color: "var(--track)" }}><Trash2 size={11} /> Supprimer</button>
-              </div>
+              {changingRound ? (
+                <ChangeRoundForm current={activeRound} onApply={applyRoundChange} onCancel={() => setChangingRound(false)} />
+              ) : (
+                <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+                  <button onClick={() => setChangingRound(true)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>Changer de tour</button>
+                  <button onClick={() => setEditing(true)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>Modifier</button>
+                  <button onClick={() => { onDeleteBlock(activeBlockIndex); setActiveRound(defaultRound(blocksForFilter.filter((b) => b !== activeBlock))); }} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm flex items-center gap-1" style={{ border: "1px solid var(--line)", color: "var(--track)" }}><Trash2 size={11} /> Supprimer</button>
+                </div>
+              )}
               <ResultsTable
                 disciplineId={filterDisciplineId}
                 entries={activeBlock.entries}

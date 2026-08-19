@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Bell, BellRing, Calendar, CalendarDays, Eye, List, MapPin, Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import { TIERS, STATUS_INFO, TIER_WEIGHT } from "../data/competitions";
+import { Bell, BellRing, Calendar, CalendarDays, Eye, ExternalLink, List, MapPin, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { TIERS, STATUS_INFO } from "../data/competitions";
 import { getCompStatus } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import CalendarMonthView from "./CalendarMonthView";
@@ -8,10 +8,13 @@ import CalendarMonthView from "./CalendarMonthView";
 export default function CalendarTab({ loaded, competitions, resultsStore, onOpen, onToggleFollow, onAddCompetition, onDeleteCompetition }) {
   const { canEdit, isAdmin } = useAuth();
   const [statusFilter, setStatusFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [view, setView] = useState("list"); // 'list' | 'calendar'
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", date: "", location: "", tier: "circuit" });
+  const [form, setForm] = useState({ name: "", date: "", location: "", tier: "circuit", resultsUrl: "" });
 
   function handleDelete(c) {
     if (!window.confirm(`Supprimer "${c.name}" et TOUS ses résultats saisis ? (restaurable depuis la corbeille par un admin)`)) return;
@@ -20,18 +23,24 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
 
   const withStatus = useMemo(() => competitions.map((c) => ({ ...c, status: getCompStatus(c, resultsStore) })), [competitions, resultsStore]);
 
+  const locations = useMemo(() => [...new Set(competitions.map((c) => c.location).filter(Boolean))].sort(), [competitions]);
+  const years = useMemo(() => [...new Set(competitions.map((c) => new Date(c.date).getFullYear()))].sort((a, b) => b - a), [competitions]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return withStatus
       .filter((c) => statusFilter === "all" || c.status === statusFilter)
+      .filter((c) => tierFilter === "all" || c.tier === tierFilter)
+      .filter((c) => locationFilter === "all" || c.location === locationFilter)
+      .filter((c) => yearFilter === "all" || new Date(c.date).getFullYear() === yearFilter)
       .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.location || "").toLowerCase().includes(q))
-      .sort((a, b) => (TIER_WEIGHT[a.tier] - TIER_WEIGHT[b.tier]) || (new Date(b.date) - new Date(a.date)));
-  }, [withStatus, statusFilter, query]);
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [withStatus, statusFilter, tierFilter, locationFilter, yearFilter, query]);
 
   function handleAdd() {
     if (!form.name.trim() || !form.date) return;
     onAddCompetition({ ...form });
-    setForm({ name: "", date: "", location: "", tier: "circuit" });
+    setForm({ name: "", date: "", location: "", tier: "circuit", resultsUrl: "" });
     setShowForm(false);
   }
 
@@ -52,7 +61,7 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
         <CalendarMonthView competitions={rows} onOpen={onOpen} />
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <div className="flex flex-wrap gap-2">
               {[["all", "Toutes"], ["a_saisir", "À saisir"], ["en_cours", "En cours"], ["a_venir", "À venir"], ["saisi", "Saisi"]].map(([key, label]) => (
                 <button key={key} onClick={() => setStatusFilter(key)}
@@ -62,6 +71,28 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
             </div>
             {canEdit && (
               <button onClick={() => setShowForm((v) => !v)} className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--track)", color: "#fff" }}><Plus size={14} /> Ajouter une compétition</button>
+            )}
+          </div>
+
+          {/* Filtres complémentaires : type, lieu, période */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setTierFilter("all")} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={{ background: tierFilter === "all" ? "var(--ink)" : "var(--card)", color: tierFilter === "all" ? "#fff" : "var(--steel)", border: "1px solid var(--line)" }}>Tous types</button>
+              {Object.entries(TIERS).map(([key, t]) => (
+                <button key={key} onClick={() => setTierFilter(key)} className="focus-ring font-mono text-[10px] uppercase tracking-wide px-2 py-1 rounded-sm" style={tierFilter === key ? t.style : { color: "var(--steel)", border: "1px solid var(--line)" }}>{t.label}</button>
+              ))}
+            </div>
+            {locations.length > 0 && (
+              <select className="field" style={{ width: "auto" }} value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+                <option value="all">Tous les lieux</option>
+                {locations.map((l) => (<option key={l} value={l}>{l}</option>))}
+              </select>
+            )}
+            {years.length > 1 && (
+              <select className="field" style={{ width: "auto" }} value={yearFilter} onChange={(e) => setYearFilter(e.target.value === "all" ? "all" : parseInt(e.target.value, 10))}>
+                <option value="all">Toutes les années</option>
+                {years.map((y) => (<option key={y} value={y}>{y}</option>))}
+              </select>
             )}
           </div>
 
@@ -80,43 +111,51 @@ export default function CalendarTab({ loaded, competitions, resultsStore, onOpen
               <select className="field" value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value })}>
                 {Object.entries(TIERS).map(([key, t]) => (<option key={key} value={key}>{t.label}</option>))}
               </select>
-              <input className="field sm:col-span-3" placeholder="Lieu" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-              <button onClick={handleAdd} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm" style={{ background: "var(--ink)", color: "#fff" }}>Enregistrer</button>
+              <input className="field sm:col-span-2" placeholder="Lieu" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+              <input className="field sm:col-span-2" placeholder="Lien résultats/fiche horaire (optionnel)" value={form.resultsUrl} onChange={(e) => setForm({ ...form, resultsUrl: e.target.value })} />
+              <button onClick={handleAdd} className="focus-ring font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm sm:col-span-4" style={{ background: "var(--ink)", color: "#fff" }}>Enregistrer</button>
             </div>
           )}
 
-          <div className="space-y-2">
+          <div className="grid md:grid-cols-2 gap-3">
             {rows.map((c) => (
-              <div key={c.id} className="rounded-md p-4 flex items-center gap-4" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
-                {canEdit ? (
-                  <button onClick={() => onToggleFollow(c.id)} aria-label="Suivre cette compétition" className="focus-ring p-1.5 rounded-sm shrink-0" style={{ color: c.following ? "var(--track)" : "var(--steel)" }}>
-                    {c.following ? <BellRing size={17} /> : <Bell size={17} />}
-                  </button>
-                ) : (
-                  <span className="p-1.5 shrink-0" style={{ color: "var(--line)" }}><Bell size={17} /></span>
-                )}
-                <button onClick={() => onOpen(c.id, "view")} className="focus-ring flex-1 min-w-0 text-left">
-                  <div className="flex items-center gap-2 flex-wrap">
+              <div key={c.id} className="rounded-md p-4" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <button onClick={() => onOpen(c.id, "view")} className="focus-ring text-left min-w-0">
                     <span className="font-display text-sm" style={{ color: "var(--ink)" }}>{c.name}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm" style={TIERS[c.tier].style}>{TIERS[c.tier].label}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm" style={STATUS_INFO[c.status].style}>{STATUS_INFO[c.status].label}</span>
-                  </div>
-                  <p className="text-xs mt-1 flex items-center gap-3 flex-wrap" style={{ color: "var(--steel)" }}>
-                    <span className="flex items-center gap-1"><Calendar size={11} />{new Date(c.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}</span>
-                    {c.location && <span className="flex items-center gap-1"><MapPin size={11} />{c.location}</span>}
-                  </p>
-                </button>
-                <button onClick={() => onOpen(c.id, canEdit ? "edit" : "view")} className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-2 rounded-sm shrink-0" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>
-                  {canEdit ? (<><Pencil size={13} /> Éditeur</>) : (<><Eye size={13} /> Voir</>)}
-                </button>
-                {isAdmin && (
-                  <button onClick={() => handleDelete(c)} aria-label="Supprimer cette compétition" className="focus-ring p-1.5 rounded-sm shrink-0" style={{ color: "var(--track)" }}>
-                    <Trash2 size={16} />
                   </button>
-                )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canEdit ? (
+                      <button onClick={() => onToggleFollow(c.id)} aria-label="Suivre cette compétition" className="focus-ring p-1 rounded-sm" style={{ color: c.following ? "var(--track)" : "var(--steel)" }}>
+                        {c.following ? <BellRing size={15} /> : <Bell size={15} />}
+                      </button>
+                    ) : null}
+                    {isAdmin && (
+                      <button onClick={() => handleDelete(c)} aria-label="Supprimer cette compétition" className="focus-ring p-1 rounded-sm" style={{ color: "var(--track)" }}><Trash2 size={15} /></button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm" style={TIERS[c.tier].style}>{TIERS[c.tier].label}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm" style={STATUS_INFO[c.status].style}>{STATUS_INFO[c.status].label}</span>
+                </div>
+                <p className="text-xs mb-3 flex items-center gap-3 flex-wrap" style={{ color: "var(--steel)" }}>
+                  <span className="flex items-center gap-1"><Calendar size={11} />{new Date(c.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}</span>
+                  {c.location && <span className="flex items-center gap-1"><MapPin size={11} />{c.location}</span>}
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => onOpen(c.id, canEdit ? "edit" : "view")} className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-1.5 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--ink)" }}>
+                    {canEdit ? (<><Pencil size={12} /> Éditeur</>) : (<><Eye size={12} /> Voir</>)}
+                  </button>
+                  {c.resultsUrl && (
+                    <a href={c.resultsUrl} target="_blank" rel="noreferrer" className="focus-ring flex items-center gap-1 font-mono text-xs uppercase tracking-wide px-3 py-1.5 rounded-sm" style={{ border: "1px solid var(--line)", color: "var(--track)" }}>
+                      <ExternalLink size={12} /> Résultats officiels
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
-            {rows.length === 0 && <p className="text-sm font-mono" style={{ color: "var(--steel)" }}>Aucune compétition pour ce filtre.</p>}
+            {rows.length === 0 && <p className="text-sm font-mono md:col-span-2" style={{ color: "var(--steel)" }}>Aucune compétition pour ce filtre.</p>}
           </div>
         </>
       )}

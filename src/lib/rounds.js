@@ -1,4 +1,4 @@
-const ROUND_ORDER = { finale: 0, demi: 1, serie: 2 };
+const ROUND_ORDER = { finale: 0, demi: 1, serie: 2, overview: -1 };
 
 export function roundKey(round) {
   if (!round) return "none";
@@ -7,7 +7,8 @@ export function roundKey(round) {
 
 export function roundLabel(round) {
   if (!round) return "";
-  if (round.type === "finale") return "Finale";
+  if (round.type === "overview") return "Vue d'ensemble";
+  if (round.type === "finale") return !round.heat || round.heat === 1 ? "Finale" : `Finale ${round.heat}`;
   if (round.type === "demi") return `Demi-finale ${round.heat}`;
   return `Série ${round.heat}`;
 }
@@ -26,7 +27,7 @@ export function nextHeatNumber(existingRounds, type) {
 
 export function defaultRound(blocksForFilter) {
   if (!blocksForFilter.length) return null;
-  const finale = blocksForFilter.find((b) => b.round.type === "finale");
+  const finale = [...blocksForFilter].sort((a, b) => compareRounds(a.round, b.round)).find((b) => b.round.type === "finale");
   return (finale || blocksForFilter[0]).round;
 }
 
@@ -41,3 +42,9 @@ export function envLabel(env) {
 export function blockKey(disciplineId, gender, environment, round) {
   return `${disciplineId}|${gender}|${environment || "outdoor"}|${roundKey(round)}`;
 }
+
+/* Pseudo-tour calculé automatiquement (jamais stocké) : combine finale(s),
+   demi-finale(s) et série(s) d'une même discipline/sexe/environnement pour
+   donner une vue d'ensemble — la meilleure marque de chaque athlète, tous
+   tours confondus, au sein d'UNE SEULE compétition. */
+export const OVERVIEW_ROUND = { type: "overview", heat: null };

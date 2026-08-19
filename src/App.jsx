@@ -131,9 +131,30 @@ export default function App() {
   }
   async function addCompetition(data) {
     const id = uid();
-    await persistCompetitions([...competitionsRef.current, { id, following: false, manualComplete: false, ...data }]);
+    await persistCompetitions([...competitionsRef.current, { id, following: false, manualComplete: false, resultsUrl: "", ...data }]);
     logAudit("Ajout compétition", data.name);
     return id;
+  }
+  async function updateCompetitionMeta(compId, patch) {
+    const comp = competitionsRef.current.find((c) => c.id === compId);
+    if (!comp) return;
+    await persistCompetitions(competitionsRef.current.map((c) => (c.id === compId ? { ...c, ...patch } : c)));
+    logAudit("Modification infos compétition", comp.name);
+  }
+  async function changeBlockRound(compId, index, newRound) {
+    const blocks = resultsStoreRef.current[compId] || [];
+    const block = blocks[index];
+    if (!block) return false;
+    const conflict = blocks.some((b, i) => i !== index
+      && b.disciplineId === block.disciplineId && b.gender === block.gender
+      && (b.environment || "outdoor") === (block.environment || "outdoor")
+      && roundKey(b.round) === roundKey(newRound));
+    if (conflict) return false;
+    const updated = blocks.map((b, i) => (i === index ? { ...b, round: newRound } : b));
+    await persistResults({ ...resultsStoreRef.current, [compId]: updated });
+    const disc = DISCIPLINES.find((d) => d.id === block.disciplineId);
+    logAudit("Changement de tour", `${disc ? getLabel(disc, block.gender) : block.disciplineId} → ${roundLabel(newRound)}`);
+    return true;
   }
   function saveBlock(compId, rawBlock) {
     const { entries, registry } = resolveBlockEntries(rawBlock.entries, athletesRef.current, rawBlock.gender);
@@ -359,6 +380,8 @@ export default function App() {
             onDeleteBlock={(i) => deleteBlock(activeComp.id, i)}
             onDeleteEntry={(disciplineId2, gender2, environment2, round2, athleteId) => deleteAthletePerformance(activeComp.id, disciplineId2, gender2, environment2, round2, athleteId)}
             onToggleComplete={() => toggleComplete(activeComp.id)}
+            onUpdateMeta={(patch) => updateCompetitionMeta(activeComp.id, patch)}
+            onChangeRound={(index, newRound) => changeBlockRound(activeComp.id, index, newRound)}
           />
         ) : (
           <CalendarTab

@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { X, Calendar, Trash2, Filter } from "lucide-react";
+import { X, Calendar, Trash2, Filter, Maximize2, Minimize2 } from "lucide-react";
 import { DISCIPLINES, getLabel } from "../data/disciplines";
 import { formatMark, isBetterMark, isLegalWind } from "../lib/marks";
 import { roundLabel, envLabel } from "../lib/rounds";
 import { getAthleteHistory } from "../lib/ranking";
 import { useAuth } from "../lib/auth";
 import AddPerformancePanel from "./AddPerformancePanel";
+import ProgressionScale from "./ProgressionScale";
 
 export default function AthleteProfilePanel({ athleteId, athletes, resultsStore, competitions, onClose, onOpenCompetition, onAddPerformance, onSetGender, onDeletePerformance }) {
   const { canEdit, isAdmin } = useAuth();
+  const [expanded, setExpanded] = useState(false);
   const athlete = athletes.find((a) => a.id === athleteId);
   const [historyFilter, setHistoryFilter] = useState(null); // `${disciplineId}-${gender}-${environment}` ou null
   const history = useMemo(() => getAthleteHistory(athleteId, resultsStore, competitions), [athleteId, resultsStore, competitions]);
@@ -34,9 +36,12 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0" style={{ background: "rgba(20,23,31,0.5)" }} onClick={onClose} />
-      <div className="relative w-full sm:w-96 h-full overflow-y-auto" style={{ background: "var(--card)" }}>
+      <div className={"relative h-full overflow-y-auto " + (expanded ? "w-full" : "w-full sm:w-96")} style={{ background: "var(--card)" }}>
         <div className="p-5" style={{ background: "var(--ink)" }}>
-          <button onClick={onClose} aria-label="Fermer la fiche athlète" className="focus-ring float-right p-1 rounded-sm" style={{ color: "#fff" }}><X size={20} /></button>
+          <button onClick={onClose} aria-label="Fermer la fiche athlète" className="focus-ring float-right p-1 rounded-sm ml-2" style={{ color: "#fff" }}><X size={20} /></button>
+          <button onClick={() => setExpanded((v) => !v)} aria-label={expanded ? "Réduire" : "Agrandir en pleine page"} className="focus-ring float-right p-1 rounded-sm hidden sm:block" style={{ color: "#fff" }}>
+            {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
           <p className="font-mono text-xs uppercase tracking-wider mb-1" style={{ color: "var(--lane-yellow)" }}>Fiche athlète</p>
           <h2 className="font-display font-semibold text-2xl text-white">{athlete.canonicalName}</h2>
           <p className="text-sm mt-1" style={{ color: "#c7ccd3" }}>{athlete.club || "Club non renseigné"}</p>
@@ -56,7 +61,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
           </div>
         </div>
 
-        <div className="p-5">
+        <div className={"p-5" + (expanded ? " max-w-2xl mx-auto" : "")}>
           <p className="font-mono text-xs uppercase tracking-wider mb-3" style={{ color: "var(--steel)" }}>Records personnels (données saisies)</p>
           {bests.length === 0 ? (
             <p className="text-sm mb-4" style={{ color: "var(--steel)" }}>Aucun résultat enregistré pour le moment.</p>
@@ -97,7 +102,7 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
           )}
         </div>
 
-        <div className="px-5 pb-8">
+        <div className={"px-5 pb-8" + (expanded ? " max-w-2xl mx-auto" : "")}>
           <div className="flex items-center justify-between mb-3">
             <p className="font-mono text-xs uppercase tracking-wider" style={{ color: "var(--steel)" }}>Historique des résultats</p>
             {historyFilter && (
@@ -107,6 +112,9 @@ export default function AthleteProfilePanel({ athleteId, athletes, resultsStore,
             )}
           </div>
           <div className="space-y-1">
+            {historyFilter && visibleHistory.length > 0 && (
+              <ProgressionScale discipline={DISCIPLINES.find((d) => d.id === visibleHistory[0].disciplineId)} history={visibleHistory} />
+            )}
             {visibleHistory.map((h, i) => {
               const disc = DISCIPLINES.find((d) => d.id === h.disciplineId);
               return (
